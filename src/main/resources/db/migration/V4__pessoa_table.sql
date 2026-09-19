@@ -1,10 +1,10 @@
 CREATE TABLE pessoa (
     id                         UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-    congregacao_id             UUID         NOT NULL REFERENCES congregacao (id),
-    endereco_id                UUID         REFERENCES endereco (id),
     nome                       VARCHAR(150) NOT NULL,
     data_nascimento            DATE         NOT NULL,
     status                     VARCHAR(20)  NOT NULL DEFAULT 'PENDENTE',
+    congregacao_id             UUID         NOT NULL REFERENCES congregacao (id),
+    endereco_id                UUID         REFERENCES endereco (id),
 
     -- LGPD: responsável legal (obrigatório para menores; exigência validada no Service)
     responsavel_legal_nome     VARCHAR(150),
