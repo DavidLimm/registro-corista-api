@@ -1,0 +1,41 @@
+name: registro-coristas
+
+services:
+  db:
+    image: postgres:16
+    container_name: registro-coristas-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-registro_coristas}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Só sobe com: docker compose --profile app up --build
+  # (o `docker compose up -d` simples sobe apenas o banco)
+  app:
+    profiles: ["app"]
+    build: .
+    container_name: registro-coristas-app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-registro_coristas}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:
