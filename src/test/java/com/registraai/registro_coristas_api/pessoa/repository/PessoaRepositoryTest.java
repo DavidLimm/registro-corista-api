@@ -8,6 +8,8 @@ import com.registraai.registro_coristas_api.endereco.model.Endereco;
 import com.registraai.registro_coristas_api.endereco.repository.EnderecoRepository;
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
 import com.registraai.registro_coristas_api.pessoa.model.StatusPessoa;
+import jakarta.persistence.EntityManager;
+import org.hibernate.Hibernate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +17,8 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -50,6 +54,9 @@ class PessoaRepositoryTest {
 
     @Autowired
     private EnderecoRepository enderecoRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     private Congregacao congregacao;
 
@@ -101,6 +108,28 @@ class PessoaRepositoryTest {
         assertThat(lida.getResponsavelLegalNome()).isEqualTo("José da Silva");
         assertThat(lida.getConsentimentoLgpdEm()).isEqualTo(agora);
         assertThat(lida.getAprovadoPor()).isEqualTo(aprovador);
+    }
+
+    /** Com o open-in-view desligado, o Controller monta o Response fora da transação: tudo precisa vir carregado. */
+    @Test
+    void findById_eFindAllComEspecificacao_carregamCongregacaoAreaEEnderecoJuntos() {
+        Endereco endereco = enderecoRepository.saveAndFlush(Endereco.builder()
+                .logradouro("Rua da Aurora").bairro("Boa Vista").cidade("Recife").uf("PE").build());
+        Pessoa salva = pessoaRepository.saveAndFlush(pessoaValida().endereco(endereco).build());
+        entityManager.clear();
+
+        Pessoa porId = pessoaRepository.findById(salva.getId()).orElseThrow();
+        assertThat(Hibernate.isInitialized(porId.getCongregacao())).isTrue();
+        assertThat(Hibernate.isInitialized(porId.getCongregacao().getArea())).isTrue();
+        assertThat(Hibernate.isInitialized(porId.getEndereco())).isTrue();
+
+        entityManager.clear();
+
+        Pessoa daPagina = pessoaRepository.findAll(Specification.<Pessoa>unrestricted(), PageRequest.of(0, 10))
+                .getContent().getFirst();
+        assertThat(Hibernate.isInitialized(daPagina.getCongregacao())).isTrue();
+        assertThat(Hibernate.isInitialized(daPagina.getCongregacao().getArea())).isTrue();
+        assertThat(Hibernate.isInitialized(daPagina.getEndereco())).isTrue();
     }
 
     @Test

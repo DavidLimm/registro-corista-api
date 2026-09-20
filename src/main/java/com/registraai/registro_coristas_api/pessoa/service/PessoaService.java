@@ -5,6 +5,7 @@ import com.registraai.registro_coristas_api.congregacao.model.Congregacao;
 import com.registraai.registro_coristas_api.congregacao.service.CongregacaoService;
 import com.registraai.registro_coristas_api.endereco.dto.EnderecoRequest;
 import com.registraai.registro_coristas_api.endereco.service.EnderecoService;
+import com.registraai.registro_coristas_api.pessoa.dto.PessoaFiltro;
 import com.registraai.registro_coristas_api.pessoa.dto.PessoaRequest;
 import com.registraai.registro_coristas_api.pessoa.exception.ConsentimentoLgpdObrigatorioException;
 import com.registraai.registro_coristas_api.pessoa.exception.PessoaNaoEncontradaException;
@@ -15,6 +16,10 @@ import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
 import com.registraai.registro_coristas_api.pessoa.model.StatusPessoa;
 import com.registraai.registro_coristas_api.pessoa.repository.PessoaRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +56,38 @@ public class PessoaService {
     public Pessoa buscarPorId(UUID id) {
         return pessoaRepository.findById(id)
                 .orElseThrow(() -> new PessoaNaoEncontradaException(id));
+    }
+
+    /** Ordenada por nome (o cliente não escolhe a ordenação). A faixa etária filtrada é a real, pela data de nascimento. */
+    @Transactional(readOnly = true)
+    public Page<Pessoa> listar(PessoaFiltro filtro, int pagina, int tamanho) {
+        Specification<Pessoa> especificacao = Specification.unrestricted();
+        if (filtro.nome() != null && !filtro.nome().isBlank()) {
+            String trecho = "%" + escaparLike(filtro.nome().trim().toLowerCase()) + "%";
+            especificacao = especificacao.and((root, query, cb) ->
+                    cb.like(cb.lower(root.get("nome")), trecho, '\\'));
+        }
+        if (filtro.areaId() != null) {
+            especificacao = especificacao.and((root, query, cb) ->
+                    cb.equal(root.get("congregacao").get("area").get("id"), filtro.areaId()));
+        }
+        if (filtro.congregacaoId() != null) {
+            especificacao = especificacao.and((root, query, cb) ->
+                    cb.equal(root.get("congregacao").get("id"), filtro.congregacaoId()));
+        }
+        if (filtro.faixaEtaria() != null) {
+            LocalDate limite = Pessoa.nascimentoLimiteDaMaioridade(LocalDate.now(clock));
+            especificacao = especificacao.and((root, query, cb) -> switch (filtro.faixaEtaria()) {
+                case JOVEM -> cb.lessThanOrEqualTo(root.<LocalDate>get("dataNascimento"), limite);
+                case ADOLESCENTE -> cb.greaterThan(root.<LocalDate>get("dataNascimento"), limite);
+            });
+        }
+        if (filtro.status() != null) {
+            especificacao = especificacao.and((root, query, cb) -> cb.equal(root.get("status"), filtro.status()));
+        }
+        // "id" desempata nomes iguais para a paginação ser estável
+        PageRequest pageable = PageRequest.of(pagina, tamanho, Sort.by("nome").and(Sort.by("id")));
+        return pessoaRepository.findAll(especificacao, pageable);
     }
 
     /**
@@ -152,5 +189,10 @@ public class PessoaService {
             return null;
         }
         return telefone.replaceAll("\\D", "");
+    }
+
+    // o texto digitado é literal: % e _ não viram curinga do LIKE
+    private String escaparLike(String texto) {
+        return texto.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 }

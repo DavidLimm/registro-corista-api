@@ -1,6 +1,5 @@
 package com.registraai.registro_coristas_api.telefone;
 
-import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -25,10 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Fluxo completo Controller → Service → Repository → Postgres real (Flyway aplica o schema). Ainda não há endpoint
- * de pessoa, então cada teste obtém uma pessoa cadastrando um corista adulto.
- */
+/** Fluxo completo Controller → Service → Repository → Postgres real (Flyway aplica o schema). */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
@@ -59,14 +55,13 @@ class TelefoneIntegracaoTest {
                         .content("{ \"areaId\": \"%s\", \"nome\": \"Sede\" }".formatted(areaId)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getHeader("Location"));
-        String corpo = mockMvc.perform(post("/v1/api/coristas").contentType(MediaType.APPLICATION_JSON)
+        String location = mockMvc.perform(post("/v1/api/pessoas").contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                { "pessoa": { "nome": "Maria da Silva", "dataNascimento": "1995-05-17",
-                                              "congregacaoId": "%s" },
-                                  "tipoVoz": "SOPRANO", "tamanhoCamisa": "M" }""".formatted(congregacaoId)))
+                                { "nome": "Maria da Silva", "dataNascimento": "1995-05-17",
+                                  "congregacaoId": "%s" }""".formatted(congregacaoId)))
                 .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString();
-        return JsonPath.read(corpo, "$.pessoa.id");
+                .andReturn().getResponse().getHeader("Location");
+        return idDoLocation(location);
     }
 
     private String base(String pessoaId) {
