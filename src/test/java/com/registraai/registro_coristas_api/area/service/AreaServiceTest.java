@@ -3,8 +3,10 @@ package com.registraai.registro_coristas_api.area.service;
 import com.registraai.registro_coristas_api.area.dto.AreaRequest;
 import com.registraai.registro_coristas_api.area.exception.AreaNaoEncontradaException;
 import com.registraai.registro_coristas_api.area.exception.AreaNumeroDuplicadoException;
+import com.registraai.registro_coristas_api.area.exception.AreaPossuiCongregacoesException;
 import com.registraai.registro_coristas_api.area.model.Area;
 import com.registraai.registro_coristas_api.area.repository.AreaRepository;
+import com.registraai.registro_coristas_api.congregacao.repository.CongregacaoRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -28,6 +30,9 @@ class AreaServiceTest {
 
     @Mock
     private AreaRepository areaRepository;
+
+    @Mock
+    private CongregacaoRepository congregacaoRepository;
 
     @InjectMocks
     private AreaService areaService;
@@ -131,6 +136,7 @@ class AreaServiceTest {
         UUID id = UUID.randomUUID();
         Area existente = Area.builder().id(id).numero(40).nome("Área 40").build();
         when(areaRepository.findById(id)).thenReturn(Optional.of(existente));
+        when(congregacaoRepository.countByAreaIdAndAtivaTrue(id)).thenReturn(0L);
 
         areaService.inativar(id);
 
@@ -138,6 +144,29 @@ class AreaServiceTest {
         verify(areaRepository).save(existente);
         verify(areaRepository, never()).delete(any());
         verify(areaRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void inativar_lancaExcecaoENaoAlteraQuandoHaCongregacoesAtivasNaArea() {
+        UUID id = UUID.randomUUID();
+        Area existente = Area.builder().id(id).numero(40).nome("Área 40").build();
+        when(areaRepository.findById(id)).thenReturn(Optional.of(existente));
+        when(congregacaoRepository.countByAreaIdAndAtivaTrue(id)).thenReturn(13L);
+
+        assertThatThrownBy(() -> areaService.inativar(id))
+                .isInstanceOf(AreaPossuiCongregacoesException.class)
+                .satisfies(excecao -> assertThat(((AreaPossuiCongregacoesException) excecao).getBody().getDetail())
+                        .contains("área 40")
+                        .contains("13 congregações ativas"));
+        assertThat(existente.isAtiva()).isTrue();
+        verify(areaRepository, never()).save(any());
+    }
+
+    @Test
+    void inativar_mensagemUsaSingularQuandoHaUmaCongregacao() {
+        var excecao = new AreaPossuiCongregacoesException(40, 1);
+
+        assertThat(excecao.getBody().getDetail()).contains("existe 1 congregação ativa vinculada");
     }
 
     @Test
