@@ -8,11 +8,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Valida o mapeamento de {@link Congregacao} contra a migration V3 ({@code ddl-auto: validate}) e a contagem
@@ -70,5 +72,46 @@ class CongregacaoRepositoryTest {
 
         assertThat(congregacaoRepository.countByAreaIdAndAtivaTrue(comInativa.getId())).isZero();
         assertThat(congregacaoRepository.countByAreaIdAndAtivaTrue(vazia.getId())).isZero();
+    }
+
+    @Test
+    void salvar_mesmoNomeNaMesmaAreaViolaUnicidadeDoBanco() {
+        Area area = areaRepository.saveAndFlush(Area.builder().numero(60).nome("Área 60").build());
+        salvar(area, "Sede", true);
+
+        assertThatThrownBy(() -> salvar(area, "Sede", true))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("uk_congregacao_area_nome");
+    }
+
+    @Test
+    void salvar_mesmoNomeEmAreasDiferentesEPermitido() {
+        Area area61 = areaRepository.saveAndFlush(Area.builder().numero(61).nome("Área 61").build());
+        Area area62 = areaRepository.saveAndFlush(Area.builder().numero(62).nome("Área 62").build());
+
+        salvar(area61, "Sede", true);
+
+        assertThat(salvar(area62, "Sede", true).getId()).isNotNull();
+    }
+
+    @Test
+    void existsByAreaIdAndNomeIgnoreCase_ignoraMaiusculasEEscopoDaArea() {
+        Area area63 = areaRepository.saveAndFlush(Area.builder().numero(63).nome("Área 63").build());
+        Area area64 = areaRepository.saveAndFlush(Area.builder().numero(64).nome("Área 64").build());
+        salvar(area63, "Sede Central", true);
+
+        assertThat(congregacaoRepository.existsByAreaIdAndNomeIgnoreCase(area63.getId(), "sede central")).isTrue();
+        assertThat(congregacaoRepository.existsByAreaIdAndNomeIgnoreCase(area63.getId(), "Outra")).isFalse();
+        assertThat(congregacaoRepository.existsByAreaIdAndNomeIgnoreCase(area64.getId(), "Sede Central")).isFalse();
+    }
+
+    @Test
+    void existsByAreaIdAndNomeIgnoreCaseAndIdNot_desconsideraOProprioRegistro() {
+        Area area = areaRepository.saveAndFlush(Area.builder().numero(65).nome("Área 65").build());
+        Congregacao sede = salvar(area, "Sede", true);
+        Congregacao filial = salvar(area, "Filial", true);
+
+        assertThat(congregacaoRepository.existsByAreaIdAndNomeIgnoreCaseAndIdNot(area.getId(), "SEDE", sede.getId())).isFalse();
+        assertThat(congregacaoRepository.existsByAreaIdAndNomeIgnoreCaseAndIdNot(area.getId(), "SEDE", filial.getId())).isTrue();
     }
 }
