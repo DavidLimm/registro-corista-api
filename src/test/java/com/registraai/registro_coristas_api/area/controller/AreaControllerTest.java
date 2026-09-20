@@ -3,6 +3,7 @@ package com.registraai.registro_coristas_api.area.controller;
 import com.registraai.registro_coristas_api.area.dto.AreaRequest;
 import com.registraai.registro_coristas_api.area.exception.AreaNaoEncontradaException;
 import com.registraai.registro_coristas_api.area.exception.AreaNumeroDuplicadoException;
+import com.registraai.registro_coristas_api.area.exception.AreaPossuiCongregacoesException;
 import com.registraai.registro_coristas_api.area.model.Area;
 import com.registraai.registro_coristas_api.area.service.AreaService;
 import org.junit.jupiter.api.Test;
@@ -173,6 +174,19 @@ class AreaControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(areaService).inativar(id);
+    }
+
+    @Test
+    void inativar_comCongregacoesAtivas_retorna409ComOrientacaoParaRemanejar() throws Exception {
+        UUID id = UUID.randomUUID();
+        doThrow(new AreaPossuiCongregacoesException(40, 3)).when(areaService).inativar(id);
+
+        mockMvc.perform(delete("/v1/api/areas/{id}", id))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.detail").value(
+                        "Não é possível inativar a área 40: existem 3 congregações ativas vinculadas. "
+                                + "Remaneje-as para outra área antes de inativar."));
     }
 
     @Test

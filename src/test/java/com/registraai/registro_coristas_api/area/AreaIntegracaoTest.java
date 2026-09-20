@@ -1,5 +1,9 @@
 package com.registraai.registro_coristas_api.area;
 
+import com.registraai.registro_coristas_api.area.model.Area;
+import com.registraai.registro_coristas_api.area.repository.AreaRepository;
+import com.registraai.registro_coristas_api.congregacao.model.Congregacao;
+import com.registraai.registro_coristas_api.congregacao.repository.CongregacaoRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -11,6 +15,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -33,6 +38,18 @@ class AreaIntegracaoTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private AreaRepository areaRepository;
+
+    @Autowired
+    private CongregacaoRepository congregacaoRepository;
+
+    private Area buscarArea(int numero) {
+        return areaRepository.findAllByOrderByNumeroAsc().stream()
+                .filter(area -> area.getNumero() == numero)
+                .findFirst().orElseThrow();
+    }
 
     private String criarArea(int numero, String nome) throws Exception {
         return mockMvc.perform(post("/v1/api/areas").contentType(MediaType.APPLICATION_JSON)
@@ -97,6 +114,40 @@ class AreaIntegracaoTest {
                 .andExpect(jsonPath("$.ativa").value(true));
         mockMvc.perform(get("/v1/api/areas").param("ativa", "true"))
                 .andExpect(jsonPath("$[*].numero", hasItem(20)));
+    }
+
+    @Test
+    void inativar_comCongregacaoAtiva_retorna409ESoLiberaDepoisDeRemanejar() throws Exception {
+        String locationOrigem = criarArea(30, "Área 30");
+        String locationDestino = criarArea(31, "Área 31");
+        Area origem = buscarArea(30);
+        Area destino = buscarArea(31);
+        Congregacao congregacao = congregacaoRepository.save(
+                Congregacao.builder().area(origem).nome("Sede da Área 30").build());
+
+        mockMvc.perform(delete(locationOrigem))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(containsString("existe 1 congregação ativa")));
+        mockMvc.perform(get(locationOrigem))
+                .andExpect(jsonPath("$.ativa").value(true));
+
+        // remanejar a congregação para outra área libera a inativação
+        congregacao.setArea(destino);
+        congregacaoRepository.save(congregacao);
+
+        mockMvc.perform(delete(locationOrigem)).andExpect(status().isNoContent());
+        mockMvc.perform(get(locationOrigem)).andExpect(jsonPath("$.ativa").value(false));
+        // a área que recebeu a congregação agora é a que não pode ser inativada
+        mockMvc.perform(delete(locationDestino)).andExpect(status().isConflict());
+    }
+
+    @Test
+    void inativar_congregacaoInativaNaoBloqueia() throws Exception {
+        String location = criarArea(32, "Área 32");
+        Area area = buscarArea(32);
+        congregacaoRepository.save(Congregacao.builder().area(area).nome("Fechada").ativa(false).build());
+
+        mockMvc.perform(delete(location)).andExpect(status().isNoContent());
     }
 
     @Test
