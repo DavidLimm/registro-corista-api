@@ -8,4 +8,4 @@ ALTER TABLE corista
     ADD CONSTRAINT ck_corista_tipo_voz
         CHECK (tipo_voz IN ('BAIXO', 'CONTRALTO', 'SOPRANO', 'TENOR')),
     ADD CONSTRAINT ck_corista_tamanho_camisa
-        CHECK (tamanho_camisa IN ('P', 'M', 'G', 'GG', 'XGG'));
+        CHECK (tamanho_camisa IN ('PP', 'P', 'M', 'G', 'GG', 'XGG'));
