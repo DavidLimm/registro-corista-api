@@ -16,6 +16,10 @@ spring:
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:postgres}
 
+  mvc:
+    problemdetails:
+      enabled: true # erros de validação/404 no formato Problem Details (RFC 7807)
+
   jpa:
     open-in-view: false
     show-sql: true
