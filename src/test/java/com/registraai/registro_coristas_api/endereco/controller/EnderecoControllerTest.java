@@ -59,9 +59,9 @@ class EnderecoControllerTest {
         UUID id = UUID.randomUUID();
         when(enderecoService.criar(any(EnderecoRequest.class))).thenReturn(enderecoPersistido(id));
 
-        mockMvc.perform(post("/api/enderecos").contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
+        mockMvc.perform(post("/v1/api/enderecos").contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isCreated())
-                .andExpect(header().string("Location", "http://localhost/api/enderecos/" + id))
+                .andExpect(header().string("Location", "http://localhost/v1/api/enderecos/" + id))
                 .andExpect(jsonPath("$.id").value(id.toString()))
                 .andExpect(jsonPath("$.cep").value("50050000"))
                 .andExpect(jsonPath("$.uf").value("PE"));
@@ -73,7 +73,7 @@ class EnderecoControllerTest {
                 { "logradouro": "", "bairro": "Boa Vista", "cidade": "Recife", "uf": "PER", "cep": "5005-0000" }
                 """;
 
-        mockMvc.perform(post("/api/enderecos").contentType(MediaType.APPLICATION_JSON).content(jsonInvalido))
+        mockMvc.perform(post("/v1/api/enderecos").contentType(MediaType.APPLICATION_JSON).content(jsonInvalido))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
 
@@ -88,7 +88,7 @@ class EnderecoControllerTest {
                 { "logradouro": "Sítio Bom Jesus", "bairro": "Zona Rural", "cidade": "Vitória", "uf": "PE" }
                 """;
 
-        mockMvc.perform(post("/api/enderecos").contentType(MediaType.APPLICATION_JSON).content(jsonSemCep))
+        mockMvc.perform(post("/v1/api/enderecos").contentType(MediaType.APPLICATION_JSON).content(jsonSemCep))
                 .andExpect(status().isCreated());
     }
 
@@ -97,7 +97,7 @@ class EnderecoControllerTest {
         UUID id = UUID.randomUUID();
         when(enderecoService.buscarPorId(id)).thenReturn(enderecoPersistido(id));
 
-        mockMvc.perform(get("/api/enderecos/{id}", id))
+        mockMvc.perform(get("/v1/api/enderecos/{id}", id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.logradouro").value("Rua da Aurora"))
                 .andExpect(jsonPath("$.numero").value("123"));
@@ -108,7 +108,7 @@ class EnderecoControllerTest {
         UUID id = UUID.randomUUID();
         when(enderecoService.buscarPorId(id)).thenThrow(new EnderecoNaoEncontradoException(id));
 
-        mockMvc.perform(get("/api/enderecos/{id}", id))
+        mockMvc.perform(get("/v1/api/enderecos/{id}", id))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.detail").value("Endereço não encontrado: " + id));
@@ -116,7 +116,7 @@ class EnderecoControllerTest {
 
     @Test
     void buscarPorId_comIdMalFormado_retorna400() throws Exception {
-        mockMvc.perform(get("/api/enderecos/{id}", "nao-e-uuid"))
+        mockMvc.perform(get("/v1/api/enderecos/{id}", "nao-e-uuid"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -125,7 +125,7 @@ class EnderecoControllerTest {
         UUID id = UUID.randomUUID();
         when(enderecoService.atualizar(eq(id), any(EnderecoRequest.class))).thenReturn(enderecoPersistido(id));
 
-        mockMvc.perform(put("/api/enderecos/{id}", id).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
+        mockMvc.perform(put("/v1/api/enderecos/{id}", id).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id.toString()));
     }
@@ -136,7 +136,7 @@ class EnderecoControllerTest {
         when(enderecoService.atualizar(eq(id), any(EnderecoRequest.class)))
                 .thenThrow(new EnderecoNaoEncontradoException(id));
 
-        mockMvc.perform(put("/api/enderecos/{id}", id).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
+        mockMvc.perform(put("/v1/api/enderecos/{id}", id).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isNotFound());
     }
 }

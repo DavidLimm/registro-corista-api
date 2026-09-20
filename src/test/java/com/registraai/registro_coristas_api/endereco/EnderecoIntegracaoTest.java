@@ -39,7 +39,7 @@ class EnderecoIntegracaoTest {
                   "bairro": "Boa Vista", "cidade": "Recife", "uf": "pe", "cep": "50050-000" }
                 """;
 
-        String location = mockMvc.perform(post("/api/enderecos")
+        String location = mockMvc.perform(post("/v1/api/enderecos")
                         .contentType(MediaType.APPLICATION_JSON).content(corpoCriacao))
                 .andExpect(status().isCreated())
                 .andExpect(header().exists("Location"))
@@ -73,7 +73,7 @@ class EnderecoIntegracaoTest {
 
     @Test
     void buscarInexistente_retorna404() throws Exception {
-        mockMvc.perform(get("/api/enderecos/00000000-0000-0000-0000-000000000000"))
+        mockMvc.perform(get("/v1/api/enderecos/00000000-0000-0000-0000-000000000000"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404));
     }
