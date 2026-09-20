@@ -48,4 +48,35 @@ class PessoaTest {
     void faixaEtaria_criancaEAdolescente() {
         assertThat(nascidaEm(LocalDate.of(2020, 1, 1)).faixaEtaria(HOJE)).isEqualTo(FaixaEtaria.ADOLESCENTE);
     }
+
+    @Test
+    void nascimentoLimiteDaMaioridade_ehOMesmoDiaHaDezoitoAnos() {
+        assertThat(Pessoa.nascimentoLimiteDaMaioridade(HOJE)).isEqualTo(LocalDate.of(2008, 9, 20));
+    }
+
+    /**
+     * O filtro por faixa etária roda no banco comparando com o limite; precisa concordar com {@code menorDeIdade}
+     * em todos os dias perto da fronteira, inclusive com 29 de fevereiro.
+     */
+    @Test
+    void nascimentoLimiteDaMaioridade_concordaComMenorDeIdadeEmTodosOsDiasPertoDaFronteira() {
+        LocalDate[] hojes = {
+                HOJE,
+                LocalDate.of(2028, 2, 29),
+                LocalDate.of(2029, 2, 28),
+                LocalDate.of(2029, 3, 1),
+                LocalDate.of(2030, 2, 28),
+                LocalDate.of(2031, 1, 1),
+        };
+        for (LocalDate hoje : hojes) {
+            LocalDate limite = Pessoa.nascimentoLimiteDaMaioridade(hoje);
+            for (LocalDate nascimento = hoje.minusYears(19); !nascimento.isAfter(hoje.minusYears(17));
+                 nascimento = nascimento.plusDays(1)) {
+                boolean menorPeloLimite = nascimento.isAfter(limite);
+                assertThat(menorPeloLimite)
+                        .as("nascido em %s, hoje %s", nascimento, hoje)
+                        .isEqualTo(nascidaEm(nascimento).menorDeIdade(hoje));
+            }
+        }
+    }
 }

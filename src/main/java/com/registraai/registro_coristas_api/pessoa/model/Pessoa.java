@@ -103,4 +103,12 @@ public class Pessoa {
     public FaixaEtaria faixaEtaria(LocalDate hoje) {
         return menorDeIdade(hoje) ? FaixaEtaria.ADOLESCENTE : FaixaEtaria.JOVEM;
     }
+
+    /**
+     * Quem nasceu nesta data ou antes já tem 18 anos ou mais em {@code hoje}; quem nasceu depois é menor. Permite
+     * filtrar por faixa etária direto no banco com a mesma regra de {@link #menorDeIdade(LocalDate)}, sem gravá-la.
+     */
+    public static LocalDate nascimentoLimiteDaMaioridade(LocalDate hoje) {
+        return hoje.minusYears(IDADE_MAIORIDADE);
+    }
 }

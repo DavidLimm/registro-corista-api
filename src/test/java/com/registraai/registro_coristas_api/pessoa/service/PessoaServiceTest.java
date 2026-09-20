@@ -8,31 +8,42 @@ import com.registraai.registro_coristas_api.congregacao.service.CongregacaoServi
 import com.registraai.registro_coristas_api.endereco.dto.EnderecoRequest;
 import com.registraai.registro_coristas_api.endereco.model.Endereco;
 import com.registraai.registro_coristas_api.endereco.service.EnderecoService;
+import com.registraai.registro_coristas_api.pessoa.dto.PessoaFiltro;
 import com.registraai.registro_coristas_api.pessoa.dto.PessoaRequest;
 import com.registraai.registro_coristas_api.pessoa.exception.ConsentimentoLgpdObrigatorioException;
 import com.registraai.registro_coristas_api.pessoa.exception.PessoaNaoEncontradaException;
 import com.registraai.registro_coristas_api.pessoa.exception.ResponsavelLegalIncompletoException;
 import com.registraai.registro_coristas_api.pessoa.exception.ResponsavelLegalObrigatorioException;
 import com.registraai.registro_coristas_api.pessoa.exception.TransicaoDeStatusInvalidaException;
+import com.registraai.registro_coristas_api.pessoa.model.FaixaEtaria;
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
 import com.registraai.registro_coristas_api.pessoa.model.StatusPessoa;
 import com.registraai.registro_coristas_api.pessoa.repository.PessoaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -209,6 +220,28 @@ class PessoaServiceTest {
         when(pessoaRepository.findById(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> pessoaService.buscarPorId(id)).isInstanceOf(PessoaNaoEncontradaException.class);
+    }
+
+    // ---------- listar ----------
+
+    @Test
+    void listar_paginaOrdenandoPorNomeComDesempatePorId() {
+        Page<Pessoa> pagina = new PageImpl<>(List.of(Pessoa.builder().build()));
+        Pageable esperado = PageRequest.of(2, 15, Sort.by("nome").and(Sort.by("id")));
+        when(pessoaRepository.findAll(ArgumentMatchers.<Specification<Pessoa>>any(), eq(esperado))).thenReturn(pagina);
+
+        assertThat(pessoaService.listar(new PessoaFiltro(null, null, null, null, null), 2, 15)).isSameAs(pagina);
+    }
+
+    @Test
+    void listar_comTodosOsFiltros_repassaAoRepositorioComAMesmaPaginacao() {
+        Page<Pessoa> pagina = new PageImpl<>(List.of());
+        Pageable esperado = PageRequest.of(0, 20, Sort.by("nome").and(Sort.by("id")));
+        when(pessoaRepository.findAll(ArgumentMatchers.<Specification<Pessoa>>any(), eq(esperado))).thenReturn(pagina);
+        PessoaFiltro filtro = new PessoaFiltro("  mar_ia ", UUID.randomUUID(), congregacaoId,
+                FaixaEtaria.ADOLESCENTE, StatusPessoa.PENDENTE);
+
+        assertThat(pessoaService.listar(filtro, 0, 20)).isSameAs(pagina);
     }
 
     // ---------- atualizar ----------
