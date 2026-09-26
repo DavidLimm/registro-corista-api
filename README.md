@@ -51,14 +51,14 @@ Corista (adolescente/jovem):   AppUser → Pessoa → Corista
 - **Faixa etária real** é derivada da data de nascimento (nunca gravada): adolescente até 17a 11m 30d,
   jovem a partir de 18a.
 - **`lista_classificacao`** (`ADOLESCENTE` | `JOVEM`) é o campo gravado em `Corista` e, por padrão, segue a idade.
-- **Promoção antecipada**: apenas o líder da mocidade pode promover um adolescente para a lista de jovens.
+- **Promoção antecipada**: apenas o `LIDER_MOCIDADE` pode promover um adolescente para a lista de jovens.
   É permanente e registra trilha (`promovido_por`, `promovido_em`). Um menor promovido continua menor —
   as proteções LGPD continuam valendo.
 
 ### Workflow de cadastro
 
-`PENDENTE` (self-service) → aprovação por líder → `APROVADO`. Remoção é sempre **soft delete**
-(status `INATIVO`), nunca `DELETE` físico.
+`PENDENTE` (self-service) → aprovação por `PRESBITERO` (ou papel superior) → `APROVADO`. Remoção é sempre
+**soft delete** (status `INATIVO`), nunca `DELETE` físico.
 
 ### LGPD
 

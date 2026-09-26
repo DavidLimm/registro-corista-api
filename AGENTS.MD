@@ -77,16 +77,16 @@ docker compose up -d
 - **Classificação de faixa etária:**
     - Faixa etária real: derivada da data de nascimento, nunca gravada. Adolescente até 17a 11m 30d; jovem a partir de 18a.
     - `lista_classificacao` (ADOLESCENTE | JOVEM): campo gravado em `Corista`, por padrão segue a idade.
-    - **Promoção antecipada:** só o `RESP_MOCIDADE` (líder da mocidade) pode promover um adolescente para a lista de jovens. Apenas nesse sentido, **permanente**, com trilha (`promovido_por`, `promovido_em`). Menor promovido continua menor → proteções LGPD seguem valendo.
-- **Workflow de cadastro:** self-service entra como `PENDENTE` → `PRESBITERO+` aprova → `APROVADO`. Remoção = soft delete (`INATIVO`), nunca DELETE físico.
-- **Regras de escopo do RBAC:**
+    - **Promoção antecipada:** só o `LIDER_MOCIDADE` pode promover um adolescente para a lista de jovens. Apenas nesse sentido, **permanente**, com trilha (`promovido_por`, `promovido_em`). Menor promovido continua menor → proteções LGPD seguem valendo.
+- **Workflow de cadastro:** self-service entra como `PENDENTE` → aprovação por `PRESBITERO` (ou papel superior) → `APROVADO`. Remoção = soft delete (`INATIVO`), nunca DELETE físico.
+- **Regras de escopo do RBAC** (nomes conforme `V7__role_table.sql` — ver também a seção "Escopo de acesso por Área" abaixo):
     - `ADMIN`: global
     - `PASTOR`: área (leitura geral)
     - `PRESBITERO`: congregação
-    - `RESP_MOCIDADE` / `RESP_JOVEM` / `RESP_ADOLESCENTE`: área, com restrições ao recorte da mocidade
-    - `MAESTRO`: restrito ao seu recorte (jovens/adolescentes)
-    - `APOIO`: acesso operacional limitado
-    - `CORISTA`: apenas o próprio perfil + ver eventos do seu escopo
+    - `LIDER_MOCIDADE` / `LIDER_JOVENS` / `LIDER_ADOLESCENTES`: área, com restrições ao recorte da mocidade
+    - `MAESTRO_ADOLESCENTES` / `MAESTRO_JOVENS`: restrito ao seu recorte
+    - `APOIO_ADOLESCENTES` / `APOIO_JOVENS`: acesso operacional limitado ao seu recorte
+    - `CORISTA_ADOLESCENTES` / `CORISTA_JOVENS`: apenas o próprio perfil + ver eventos do seu escopo
 - **LGPD:** cadastro de menores exige responsável legal (nome + telefone) + consentimento explícito + trilha de aprovação/alteração.
 
 ### Escopo de acesso por Área (RBAC) — decidido em 2026-08-30, pendente de implementação
@@ -95,7 +95,7 @@ docker compose up -d
 
 **Roles** (`V7__role_table.sql`, tabela `role`): `ADMIN`, `PASTOR`, `PRESBITERO`, `LIDER_MOCIDADE`, `LIDER_JOVENS`, `LIDER_ADOLESCENTES`, `APOIO_ADOLESCENTES`, `APOIO_JOVENS`, `MAESTRO_ADOLESCENTES`, `MAESTRO_JOVENS`, `CORISTA_ADOLESCENTES`, `CORISTA_JOVENS`.
 
-⚠️ **Discrepância a resolver:** a lista de roles logo acima (seção "Regras de escopo do RBAC") usa nomes diferentes (`PRESBITERO`, `RESP_MOCIDADE`, `RESP_JOVEM`, `RESP_ADOLESCENTE`, `MAESTRO`, `APOIO`, `CORISTA`) das roles que foram efetivamente criadas no banco nesta sessão. Antes de implementar autenticação, confirmar com o responsável do projeto se são a mesma coisa com nomes diferentes ou se o conjunto de roles mudou de fato (ex.: não há `PRESBITERO` nas roles seedadas hoje).
+> Nomenclatura padronizada em 2026-09-25: a seção "Regras de escopo do RBAC" (acima) usava nomes antigos (`RESP_MOCIDADE`, `RESP_JOVEM`, `RESP_ADOLESCENTE`, `MAESTRO`, `APOIO`, `CORISTA`) — já atualizada para usar exatamente estes nomes seedados no banco. Mesma padronização aplicada em `ListaClassificacao` (Javadoc), `StatusPessoa` (Javadoc) e `README.md`.
 
 **Regra de escopo por Área (nova, definida nesta sessão):**
 - `ADMIN`: acesso global a todas as áreas — bypass total, não precisa de vínculo de área.
