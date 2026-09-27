@@ -60,7 +60,9 @@ public class Corista {
     @Column(name = "lista_classificacao", nullable = false, length = 20)
     private ListaClassificacao listaClassificacao;
 
-    // trilha da promoção antecipada (ADOLESCENTE -> JOVEM); FK para app_user virá na migration de app_user
+    // trilha da promoção antecipada (ADOLESCENTE -> JOVEM). De propósito sem FK para app_user (V11 chegou a
+    // adicionar, V12 reverteu): ainda não existe endpoint de promoção nem autenticação, então não há garantia de
+    // que o valor gravado aqui corresponda a um app_user real. Reavaliar quando esse endpoint existir.
     @Column(name = "promovido_por")
     private UUID promovidoPor;
 
