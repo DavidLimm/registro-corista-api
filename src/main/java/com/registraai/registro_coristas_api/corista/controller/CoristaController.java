@@ -13,6 +13,7 @@ import org.springframework.data.web.PagedModel;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -69,6 +70,21 @@ public class CoristaController {
     public ResponseEntity<Void> inativar(@PathVariable UUID id) {
         coristaService.inativar(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * {@code PENDENTE -> APROVADO}. TODO(autenticação): {@code aprovadoPor} deve vir do usuário logado, com a role
+     * validada contra o recorte (adolescente/jovem) do corista — ver {@code PessoaController.aprovar}.
+     */
+    @PatchMapping("/{id}/aprovar")
+    public CoristaResponse aprovar(@PathVariable UUID id, @RequestParam UUID aprovadoPor) {
+        return CoristaResponse.de(coristaService.aprovar(id, aprovadoPor), hoje());
+    }
+
+    /** {@code PENDENTE -> REPROVADO}. Nunca muda a lista de classificação (isso é só a promoção antecipada). */
+    @PatchMapping("/{id}/reprovar")
+    public CoristaResponse reprovar(@PathVariable UUID id, @RequestParam UUID reprovadoPor) {
+        return CoristaResponse.de(coristaService.reprovar(id, reprovadoPor), hoje());
     }
 
     private LocalDate hoje() {

@@ -9,6 +9,7 @@ import com.registraai.registro_coristas_api.corista.model.ListaClassificacao;
 import com.registraai.registro_coristas_api.corista.repository.CoristaRepository;
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
 import com.registraai.registro_coristas_api.pessoa.service.PessoaService;
+import com.registraai.registro_coristas_api.usuario.service.AppUserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -28,17 +29,28 @@ public class CoristaService {
 
     private final CoristaRepository coristaRepository;
     private final PessoaService pessoaService;
+    private final AppUserService appUserService;
     private final Clock clock;
 
-    /** Grava pessoa e corista na mesma transação. A lista de classificação nasce conforme a idade. */
+    /**
+     * Grava pessoa e corista na mesma transação. A lista de classificação nasce conforme a idade. Se
+     * {@code request.usuario()} vier preenchido (auto-cadastro), o login também é criado na mesma transação, com o
+     * papel derivado da lista de classificação — nunca escolhido pelo cliente.
+     */
     @Transactional
     public Corista criar(CoristaRequest request) {
         Pessoa pessoa = pessoaService.criar(request.pessoa());
         Corista corista = new Corista();
         corista.setPessoa(pessoa);
         preencher(corista, request);
-        corista.setListaClassificacao(listaPelaIdade(pessoa));
-        return coristaRepository.save(corista);
+        ListaClassificacao lista = listaPelaIdade(pessoa);
+        corista.setListaClassificacao(lista);
+        Corista salvo = coristaRepository.save(corista);
+        if (request.usuario() != null) {
+            String nomeDoRole = lista == ListaClassificacao.ADOLESCENTE ? "CORISTA_ADOLESCENTES" : "CORISTA_JOVENS";
+            appUserService.criarComPapelUnico(pessoa, request.usuario().email(), request.usuario().senha(), nomeDoRole);
+        }
+        return salvo;
     }
 
     @Transactional(readOnly = true)
@@ -99,11 +111,19 @@ public class CoristaService {
         pessoaService.inativar(corista.getPessoa().getId());
     }
 
-    /** Aprovação do cadastro ({@code PENDENTE -> APROVADO}). Ainda sem endpoint: depende de autenticação. */
+    /** Aprovação do cadastro ({@code PENDENTE -> APROVADO}). */
     @Transactional
     public Corista aprovar(UUID id, UUID aprovadoPor) {
         Corista corista = buscarPorId(id);
         pessoaService.aprovar(corista.getPessoa().getId(), aprovadoPor);
+        return corista;
+    }
+
+    /** Reprovação do cadastro ({@code PENDENTE -> REPROVADO}). Nunca muda {@code listaClassificacao}. */
+    @Transactional
+    public Corista reprovar(UUID id, UUID reprovadoPor) {
+        Corista corista = buscarPorId(id);
+        pessoaService.reprovar(corista.getPessoa().getId(), reprovadoPor);
         return corista;
     }
 

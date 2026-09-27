@@ -12,14 +12,20 @@ import com.registraai.registro_coristas_api.usuario.exception.AppUserNaoEncontra
 import com.registraai.registro_coristas_api.usuario.exception.AppUserPessoaImutavelException;
 import com.registraai.registro_coristas_api.usuario.exception.EmailDuplicadoException;
 import com.registraai.registro_coristas_api.usuario.exception.PessoaJaPossuiUsuarioException;
-import com.registraai.registro_coristas_api.usuario.exception.PessoaNaoAprovadaException;
 import com.registraai.registro_coristas_api.usuario.model.AppUser;
 import com.registraai.registro_coristas_api.usuario.repository.AppUserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
@@ -30,6 +36,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -81,7 +88,7 @@ class AppUserServiceTest {
         when(pessoaService.buscarPorId(pessoa.getId())).thenReturn(pessoa);
         when(appUserRepository.existsByPessoaId(pessoa.getId())).thenReturn(false);
         when(appUserRepository.existsByEmail("maria@exemplo.com")).thenReturn(false);
-        when(roleRepository.findById(role.getId())).thenReturn(Optional.of(role));
+        when(roleRepository.findAllById(Set.of(role.getId()))).thenReturn(List.of(role));
         when(passwordEncoder.encode("senhaForte123")).thenReturn("hash-bcrypt");
         repositorioDevolveOQueRecebe();
 
@@ -95,13 +102,18 @@ class AppUserServiceTest {
     }
 
     @Test
-    void criar_pessoaNaoAprovada_lancaExcecao() {
+    void criar_pessoaPendente_epermitido_naoExigeAprovacao() {
+        // auto-cadastro cria pessoa e usuário juntos, ainda PENDENTE (ver CoristaService.criar)
         Pessoa pendente = Pessoa.builder().id(UUID.randomUUID()).status(StatusPessoa.PENDENTE).build();
+        Role role = role("CORISTA_JOVENS", true);
         when(pessoaService.buscarPorId(pendente.getId())).thenReturn(pendente);
+        when(appUserRepository.existsByPessoaId(pendente.getId())).thenReturn(false);
+        when(appUserRepository.existsByEmail("a@a.com")).thenReturn(false);
+        when(roleRepository.findAllById(Set.of(role.getId()))).thenReturn(List.of(role));
+        repositorioDevolveOQueRecebe();
 
-        assertThatThrownBy(() -> appUserService.criar(request(pendente.getId(), "a@a.com", Set.of(UUID.randomUUID()))))
-                .isInstanceOf(PessoaNaoAprovadaException.class);
-        verify(appUserRepository, never()).save(any());
+        assertThat(appUserService.criar(request(pendente.getId(), "a@a.com", Set.of(role.getId()))).getPessoa())
+                .isSameAs(pendente);
     }
 
     @Test
@@ -134,7 +146,7 @@ class AppUserServiceTest {
         when(pessoaService.buscarPorId(pessoa.getId())).thenReturn(pessoa);
         when(appUserRepository.existsByPessoaId(pessoa.getId())).thenReturn(false);
         when(appUserRepository.existsByEmail("a@a.com")).thenReturn(false);
-        when(roleRepository.findById(roleId)).thenReturn(Optional.empty());
+        when(roleRepository.findAllById(Set.of(roleId))).thenReturn(List.of());
 
         assertThatThrownBy(() -> appUserService.criar(request(pessoa.getId(), "a@a.com", Set.of(roleId))))
                 .isInstanceOf(RoleNaoEncontradaException.class);
@@ -148,9 +160,40 @@ class AppUserServiceTest {
         when(pessoaService.buscarPorId(pessoa.getId())).thenReturn(pessoa);
         when(appUserRepository.existsByPessoaId(pessoa.getId())).thenReturn(false);
         when(appUserRepository.existsByEmail("a@a.com")).thenReturn(false);
-        when(roleRepository.findById(inativa.getId())).thenReturn(Optional.of(inativa));
+        when(roleRepository.findAllById(Set.of(inativa.getId()))).thenReturn(List.of(inativa));
 
         assertThatThrownBy(() -> appUserService.criar(request(pessoa.getId(), "a@a.com", Set.of(inativa.getId()))))
+                .isInstanceOf(RoleInativaException.class);
+        verify(appUserRepository, never()).save(any());
+    }
+
+    // ---------- criarComPapelUnico (auto-cadastro) ----------
+
+    @Test
+    void criarComPapelUnico_resolveORoleUnicoPeloNome() {
+        Pessoa pessoa = pessoaAprovada();
+        Role role = role("CORISTA_ADOLESCENTES", true);
+        when(appUserRepository.existsByPessoaId(pessoa.getId())).thenReturn(false);
+        when(appUserRepository.existsByEmail("ana@exemplo.com")).thenReturn(false);
+        when(roleRepository.findByNome("CORISTA_ADOLESCENTES")).thenReturn(Optional.of(role));
+        when(passwordEncoder.encode("senhaForte123")).thenReturn("hash");
+        repositorioDevolveOQueRecebe();
+
+        AppUser appUser = appUserService.criarComPapelUnico(pessoa, "ana@exemplo.com", "senhaForte123", "CORISTA_ADOLESCENTES");
+
+        assertThat(appUser.getRoles()).containsExactly(role);
+        assertThat(appUser.getEmail()).isEqualTo("ana@exemplo.com");
+    }
+
+    @Test
+    void criarComPapelUnico_roleInativa_lancaExcecao() {
+        Pessoa pessoa = pessoaAprovada();
+        Role inativa = role("CORISTA_JOVENS", false);
+        when(appUserRepository.existsByPessoaId(pessoa.getId())).thenReturn(false);
+        when(appUserRepository.existsByEmail("ana@exemplo.com")).thenReturn(false);
+        when(roleRepository.findByNome("CORISTA_JOVENS")).thenReturn(Optional.of(inativa));
+
+        assertThatThrownBy(() -> appUserService.criarComPapelUnico(pessoa, "ana@exemplo.com", "senhaForte123", "CORISTA_JOVENS"))
                 .isInstanceOf(RoleInativaException.class);
         verify(appUserRepository, never()).save(any());
     }
@@ -175,19 +218,21 @@ class AppUserServiceTest {
     }
 
     @Test
-    void listar_semFiltro_usaListaCompleta() {
-        List<AppUser> todos = List.of(AppUser.builder().build());
-        when(appUserRepository.findAllByOrderByEmailAsc()).thenReturn(todos);
+    void listar_paginaOrdenandoPorEmailComDesempatePorId() {
+        Page<AppUser> pagina = new PageImpl<>(List.of(AppUser.builder().build()));
+        Pageable esperado = PageRequest.of(2, 15, Sort.by("email").and(Sort.by("id")));
+        when(appUserRepository.findAll(ArgumentMatchers.<Specification<AppUser>>any(), eq(esperado))).thenReturn(pagina);
 
-        assertThat(appUserService.listar(null)).isSameAs(todos);
+        assertThat(appUserService.listar(null, 2, 15)).isSameAs(pagina);
     }
 
     @Test
-    void listar_comFiltro_delegaParaORepositorio() {
-        List<AppUser> ativos = List.of(AppUser.builder().build());
-        when(appUserRepository.findAllByAtivoOrderByEmailAsc(true)).thenReturn(ativos);
+    void listar_comFiltroAtivo_delegaParaORepositorio() {
+        Page<AppUser> pagina = new PageImpl<>(List.of(AppUser.builder().build()));
+        Pageable esperado = PageRequest.of(0, 20, Sort.by("email").and(Sort.by("id")));
+        when(appUserRepository.findAll(ArgumentMatchers.<Specification<AppUser>>any(), eq(esperado))).thenReturn(pagina);
 
-        assertThat(appUserService.listar(true)).isSameAs(ativos);
+        assertThat(appUserService.listar(true, 0, 20)).isSameAs(pagina);
     }
 
     // ---------- atualizar ----------
@@ -200,7 +245,7 @@ class AppUserServiceTest {
         AppUser existente = AppUser.builder().id(id).pessoa(pessoa).email("antigo@a.com").build();
         when(appUserRepository.findById(id)).thenReturn(Optional.of(existente));
         when(appUserRepository.existsByEmailAndIdNot("novo@a.com", id)).thenReturn(false);
-        when(roleRepository.findById(novaRole.getId())).thenReturn(Optional.of(novaRole));
+        when(roleRepository.findAllById(Set.of(novaRole.getId()))).thenReturn(List.of(novaRole));
         when(passwordEncoder.encode("senhaForte123")).thenReturn("novo-hash");
         repositorioDevolveOQueRecebe();
 

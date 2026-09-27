@@ -13,6 +13,7 @@ import org.springframework.data.web.PagedModel;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -80,6 +81,23 @@ public class PessoaController {
     public ResponseEntity<Void> inativar(@PathVariable UUID id) {
         pessoaService.inativar(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * {@code PENDENTE -> APROVADO}. TODO(autenticação): {@code aprovadoPor} deve vir do usuário logado, e sua role
+     * validada contra o recorte da pessoa (adolescente: {@code DIRIGENTE_UNIAO}+líderes; jovem:
+     * {@code LIDERANCA_GRUPO_JOVEM}/{@code DIRIGENTE_CAMPANHA}+líderes) — ainda não há autenticação, então por ora
+     * qualquer chamador pode informar qualquer {@code aprovadoPor}.
+     */
+    @PatchMapping("/{id}/aprovar")
+    public PessoaResponse aprovar(@PathVariable UUID id, @RequestParam UUID aprovadoPor) {
+        return PessoaResponse.de(pessoaService.aprovar(id, aprovadoPor), hoje());
+    }
+
+    /** {@code PENDENTE -> REPROVADO}. Mesma ressalva de {@link #aprovar} sobre a falta de autenticação. */
+    @PatchMapping("/{id}/reprovar")
+    public PessoaResponse reprovar(@PathVariable UUID id, @RequestParam UUID reprovadoPor) {
+        return PessoaResponse.de(pessoaService.reprovar(id, reprovadoPor), hoje());
     }
 
     private LocalDate hoje() {

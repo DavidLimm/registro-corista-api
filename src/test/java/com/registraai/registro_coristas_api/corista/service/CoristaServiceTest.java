@@ -13,6 +13,8 @@ import com.registraai.registro_coristas_api.pessoa.dto.PessoaRequest;
 import com.registraai.registro_coristas_api.pessoa.exception.ResponsavelLegalObrigatorioException;
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
 import com.registraai.registro_coristas_api.pessoa.service.PessoaService;
+import com.registraai.registro_coristas_api.usuario.dto.AppUserCredenciaisRequest;
+import com.registraai.registro_coristas_api.usuario.service.AppUserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -57,6 +59,9 @@ class CoristaServiceTest {
     @Mock
     private PessoaService pessoaService;
 
+    @Mock
+    private AppUserService appUserService;
+
     private CoristaService coristaService;
 
     private final PessoaRequest pessoaRequest =
@@ -64,7 +69,7 @@ class CoristaServiceTest {
 
     @BeforeEach
     void criarService() {
-        coristaService = new CoristaService(coristaRepository, pessoaService, RELOGIO);
+        coristaService = new CoristaService(coristaRepository, pessoaService, appUserService, RELOGIO);
     }
 
     private Pessoa pessoa(LocalDate nascimento) {
@@ -72,7 +77,7 @@ class CoristaServiceTest {
     }
 
     private CoristaRequest request(TipoVoz tipoVoz, TamanhoCamisa tamanhoCamisa, String ocupacao) {
-        return new CoristaRequest(pessoaRequest, tipoVoz, tamanhoCamisa, ocupacao);
+        return new CoristaRequest(pessoaRequest, tipoVoz, tamanhoCamisa, ocupacao, null);
     }
 
     /** Request válido quando o teste não se importa com os campos exclusivos de corista. */
@@ -134,6 +139,42 @@ class CoristaServiceTest {
         assertThatThrownBy(() -> coristaService.criar(requestPadrao()))
                 .isInstanceOf(ResponsavelLegalObrigatorioException.class);
         verify(coristaRepository, never()).save(any());
+    }
+
+    @Test
+    void criar_semUsuario_naoChamaAppUserService() {
+        when(pessoaService.criar(pessoaRequest)).thenReturn(pessoa(ADULTO));
+        repositorioDevolveOQueRecebe();
+
+        coristaService.criar(requestPadrao());
+
+        verify(appUserService, never()).criarComPapelUnico(any(), any(), any(), any());
+    }
+
+    @Test
+    void criar_comUsuarioEAdolescente_criaLoginComPapelCoristaAdolescentes() {
+        Pessoa pessoa = pessoa(MENOR);
+        when(pessoaService.criar(pessoaRequest)).thenReturn(pessoa);
+        repositorioDevolveOQueRecebe();
+        CoristaRequest request = new CoristaRequest(pessoaRequest, TipoVoz.SOPRANO, TamanhoCamisa.M, null,
+                new AppUserCredenciaisRequest("ana@exemplo.com", "senhaForte123"));
+
+        coristaService.criar(request);
+
+        verify(appUserService).criarComPapelUnico(pessoa, "ana@exemplo.com", "senhaForte123", "CORISTA_ADOLESCENTES");
+    }
+
+    @Test
+    void criar_comUsuarioEJovem_criaLoginComPapelCoristaJovens() {
+        Pessoa pessoa = pessoa(ADULTO);
+        when(pessoaService.criar(pessoaRequest)).thenReturn(pessoa);
+        repositorioDevolveOQueRecebe();
+        CoristaRequest request = new CoristaRequest(pessoaRequest, TipoVoz.SOPRANO, TamanhoCamisa.M, null,
+                new AppUserCredenciaisRequest("bia@exemplo.com", "senhaForte123"));
+
+        coristaService.criar(request);
+
+        verify(appUserService).criarComPapelUnico(pessoa, "bia@exemplo.com", "senhaForte123", "CORISTA_JOVENS");
     }
 
     // ---------- buscar / listar ----------
@@ -260,6 +301,18 @@ class CoristaServiceTest {
 
         assertThat(coristaService.aprovar(id, aprovador)).isSameAs(corista);
         verify(pessoaService).aprovar(pessoa.getId(), aprovador);
+    }
+
+    @Test
+    void reprovar_delegaAReprovacaoDaPessoaERetornaOCorista() {
+        UUID id = UUID.randomUUID();
+        UUID reprovador = UUID.randomUUID();
+        Pessoa pessoa = pessoa(ADULTO);
+        Corista corista = Corista.builder().id(id).pessoa(pessoa).build();
+        when(coristaRepository.findById(id)).thenReturn(Optional.of(corista));
+
+        assertThat(coristaService.reprovar(id, reprovador)).isSameAs(corista);
+        verify(pessoaService).reprovar(pessoa.getId(), reprovador);
     }
 
     // ---------- promover ----------

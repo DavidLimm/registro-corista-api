@@ -419,6 +419,44 @@ class PessoaServiceTest {
                 .isInstanceOf(PessoaNaoEncontradaException.class);
     }
 
+    // ---------- reprovar ----------
+
+    @Test
+    void reprovar_pendenteViraReprovadoComTrilha() {
+        UUID id = UUID.randomUUID();
+        UUID reprovador = UUID.randomUUID();
+        Pessoa pendente = Pessoa.builder().id(id).build();
+        when(pessoaRepository.findById(id)).thenReturn(Optional.of(pendente));
+        repositorioDevolveOQueRecebe();
+
+        Pessoa reprovada = pessoaService.reprovar(id, reprovador);
+
+        assertThat(reprovada.getStatus()).isEqualTo(StatusPessoa.REPROVADO);
+        assertThat(reprovada.getReprovadoPor()).isEqualTo(reprovador);
+        assertThat(reprovada.getReprovadoEm()).isEqualTo(AGORA);
+    }
+
+    @Test
+    void reprovar_foraDePendenteLancaExcecaoENaoAltera() {
+        UUID id = UUID.randomUUID();
+        Pessoa jaAprovada = pessoaAprovada(id);
+        when(pessoaRepository.findById(id)).thenReturn(Optional.of(jaAprovada));
+
+        assertThatThrownBy(() -> pessoaService.reprovar(id, UUID.randomUUID()))
+                .isInstanceOf(TransicaoDeStatusInvalidaException.class);
+        assertThat(jaAprovada.getStatus()).isEqualTo(StatusPessoa.APROVADO);
+        verify(pessoaRepository, never()).save(any());
+    }
+
+    @Test
+    void reprovar_lancaExcecaoQuandoNaoExiste() {
+        UUID id = UUID.randomUUID();
+        when(pessoaRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> pessoaService.reprovar(id, UUID.randomUUID()))
+                .isInstanceOf(PessoaNaoEncontradaException.class);
+    }
+
     // ---------- inativar ----------
 
     @Test
