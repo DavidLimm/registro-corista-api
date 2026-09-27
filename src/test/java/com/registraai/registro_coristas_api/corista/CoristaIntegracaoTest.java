@@ -1,5 +1,6 @@
 package com.registraai.registro_coristas_api.corista;
 
+import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -14,10 +15,12 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.UUID;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -397,6 +400,51 @@ class CoristaIntegracaoTest {
         mockMvc.perform(get("/v1/api/coristas").param("areaId", areaId).param("size", "2").param("page", "2"))
                 .andExpect(jsonPath("$.content.length()").value(1))
                 .andExpect(jsonPath("$.content[0].pessoa.nome").value("Elisa"));
+    }
+
+    // ---------- auto-cadastro com login ----------
+
+    @Test
+    void criar_comUsuario_criaLoginJuntoESoUmUsuarioPorPessoa() throws Exception {
+        String congregacaoId = criarCongregacao(criarArea(17), "Sede");
+        String camposComUsuario = CAMPOS_PADRAO_DE_CORISTA
+                + ", \"usuario\": { \"email\": \"ana@exemplo.com\", \"senha\": \"senhaForte123\" }";
+
+        String resposta = postCorista(corpo(congregacaoId, "Ana", haAnos(30, 0), "", camposComUsuario))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.pessoa.status").value("PENDENTE"))
+                .andReturn().getResponse().getContentAsString();
+        String pessoaId = JsonPath.read(resposta, "$.pessoa.id");
+
+        // já existe usuário para essa pessoa: uma nova tentativa de criar login pra ela esbarra na unicidade
+        mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON)
+                        .content(("{ \"pessoaId\": \"%s\", \"email\": \"outro@exemplo.com\","
+                                + " \"senha\": \"outraSenha123\", \"roleIds\": [\"%s\"] }")
+                                .formatted(pessoaId, UUID.randomUUID())))
+                .andExpect(status().isConflict());
+    }
+
+    // ---------- aprovar / reprovar ----------
+
+    @Test
+    void aprovar_pendenteViraAprovado() throws Exception {
+        String sede = criarCongregacao(criarArea(18), "Sede");
+        String id = cadastrar(sede, "Bia", haAnos(30, 0));
+
+        mockMvc.perform(patch("/v1/api/coristas/" + id + "/aprovar").param("aprovadoPor", UUID.randomUUID().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pessoa.status").value("APROVADO"));
+    }
+
+    @Test
+    void reprovar_pendenteViraReprovadoSemAlterarListaDeClassificacao() throws Exception {
+        String sede = criarCongregacao(criarArea(19), "Sede");
+        String id = cadastrar(sede, "Caio", haAnos(15, 6));
+
+        mockMvc.perform(patch("/v1/api/coristas/" + id + "/reprovar").param("reprovadoPor", UUID.randomUUID().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pessoa.status").value("REPROVADO"))
+                .andExpect(jsonPath("$.listaClassificacao").value("ADOLESCENTE"));
     }
 
     @Test

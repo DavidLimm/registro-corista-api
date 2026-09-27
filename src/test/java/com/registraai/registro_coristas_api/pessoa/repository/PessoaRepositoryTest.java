@@ -110,6 +110,28 @@ class PessoaRepositoryTest {
         assertThat(lida.getAprovadoPor()).isEqualTo(aprovador);
     }
 
+    @Test
+    void salvar_persisteReprovacao() {
+        UUID reprovador = UUID.randomUUID();
+        Instant agora = Instant.parse("2026-09-20T12:00:00Z");
+
+        Pessoa salva = pessoaRepository.saveAndFlush(pessoaValida()
+                .status(StatusPessoa.REPROVADO).reprovadoPor(reprovador).reprovadoEm(agora).build());
+
+        Pessoa lida = pessoaRepository.findById(salva.getId()).orElseThrow();
+        assertThat(lida.getStatus()).isEqualTo(StatusPessoa.REPROVADO);
+        assertThat(lida.getReprovadoPor()).isEqualTo(reprovador);
+        assertThat(lida.getReprovadoEm()).isEqualTo(agora);
+    }
+
+    @Test
+    void salvar_reprovacaoSemTrilhaCompletaViolaConstraintDoBanco() {
+        assertThatThrownBy(() -> pessoaRepository.saveAndFlush(pessoaValida()
+                        .status(StatusPessoa.REPROVADO).reprovadoPor(UUID.randomUUID()).build()))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_pessoa_reprovacao_completa");
+    }
+
     /** Com o open-in-view desligado, o Controller monta o Response fora da transação: tudo precisa vir carregado. */
     @Test
     void findById_eFindAllComEspecificacao_carregamCongregacaoAreaEEnderecoJuntos() {

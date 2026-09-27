@@ -11,6 +11,7 @@ import com.registraai.registro_coristas_api.pessoa.exception.ConsentimentoLgpdOb
 import com.registraai.registro_coristas_api.pessoa.exception.PessoaNaoEncontradaException;
 import com.registraai.registro_coristas_api.pessoa.exception.ResponsavelLegalIncompletoException;
 import com.registraai.registro_coristas_api.pessoa.exception.ResponsavelLegalObrigatorioException;
+import com.registraai.registro_coristas_api.pessoa.exception.TransicaoDeStatusInvalidaException;
 import com.registraai.registro_coristas_api.pessoa.model.FaixaEtaria;
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
 import com.registraai.registro_coristas_api.pessoa.model.StatusPessoa;
@@ -41,6 +42,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -347,5 +349,59 @@ class PessoaControllerTest {
         doThrow(new PessoaNaoEncontradaException(id)).when(pessoaService).inativar(id);
 
         mockMvc.perform(delete("/v1/api/pessoas/{id}", id)).andExpect(status().isNotFound());
+    }
+
+    // ---------- aprovar / reprovar ----------
+
+    @Test
+    void aprovar_retorna200ComStatusAprovado() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID aprovador = UUID.randomUUID();
+        when(pessoaService.aprovar(id, aprovador))
+                .thenReturn(pessoaPersistida(id, LocalDate.of(2000, 5, 17), StatusPessoa.APROVADO, false));
+
+        mockMvc.perform(patch("/v1/api/pessoas/{id}/aprovar", id).param("aprovadoPor", aprovador.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("APROVADO"));
+    }
+
+    @Test
+    void aprovar_foraDePendente_retorna409() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID aprovador = UUID.randomUUID();
+        when(pessoaService.aprovar(id, aprovador))
+                .thenThrow(new TransicaoDeStatusInvalidaException(StatusPessoa.INATIVO, StatusPessoa.APROVADO));
+
+        mockMvc.perform(patch("/v1/api/pessoas/{id}/aprovar", id).param("aprovadoPor", aprovador.toString()))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void aprovar_semParametroObrigatorio_retorna400() throws Exception {
+        mockMvc.perform(patch("/v1/api/pessoas/{id}/aprovar", UUID.randomUUID())).andExpect(status().isBadRequest());
+
+        verifyNoInteractions(pessoaService);
+    }
+
+    @Test
+    void reprovar_retorna200ComStatusReprovado() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID reprovador = UUID.randomUUID();
+        when(pessoaService.reprovar(id, reprovador))
+                .thenReturn(pessoaPersistida(id, LocalDate.of(2000, 5, 17), StatusPessoa.REPROVADO, false));
+
+        mockMvc.perform(patch("/v1/api/pessoas/{id}/reprovar", id).param("reprovadoPor", reprovador.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REPROVADO"));
+    }
+
+    @Test
+    void reprovar_inexistente_retorna404() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID reprovador = UUID.randomUUID();
+        when(pessoaService.reprovar(id, reprovador)).thenThrow(new PessoaNaoEncontradaException(id));
+
+        mockMvc.perform(patch("/v1/api/pessoas/{id}/reprovar", id).param("reprovadoPor", reprovador.toString()))
+                .andExpect(status().isNotFound());
     }
 }
