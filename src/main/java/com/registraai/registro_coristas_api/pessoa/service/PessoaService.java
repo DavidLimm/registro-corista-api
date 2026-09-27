@@ -106,8 +106,10 @@ public class PessoaService {
     }
 
     /**
-     * {@code PENDENTE -> APROVADO}, registrando quem aprovou. Ainda sem endpoint: a identidade de quem aprova
-     * ({@code PRESBITERO+}) só existirá com a autenticação.
+     * {@code PENDENTE -> APROVADO}, registrando quem aprovou. Só vale a partir de {@code PENDENTE}: não reverte
+     * {@code REPROVADO}/{@code INATIVO}. Quem chama ({@code aprovadoPor}) ainda não é validado contra a role/área
+     * de quem está autenticado — isso depende da autenticação, que ainda não existe (ver AGENTS.md). Nunca muda a
+     * classificação adolescente/jovem: isso é sempre a promoção antecipada em {@code CoristaService.promover}.
      */
     @Transactional
     public Pessoa aprovar(UUID id, UUID aprovadoPor) {
@@ -118,6 +120,22 @@ public class PessoaService {
         pessoa.setStatus(StatusPessoa.APROVADO);
         pessoa.setAprovadoPor(aprovadoPor);
         pessoa.setAprovadoEm(Instant.now(clock));
+        return pessoaRepository.save(pessoa);
+    }
+
+    /**
+     * {@code PENDENTE -> REPROVADO}, registrando quem reprovou. Só vale a partir de {@code PENDENTE}. Mesma ressalva
+     * de {@link #aprovar}: {@code reprovadoPor} ainda não é validado contra role/área (sem autenticação).
+     */
+    @Transactional
+    public Pessoa reprovar(UUID id, UUID reprovadoPor) {
+        Pessoa pessoa = buscarPorId(id);
+        if (pessoa.getStatus() != StatusPessoa.PENDENTE) {
+            throw new TransicaoDeStatusInvalidaException(pessoa.getStatus(), StatusPessoa.REPROVADO);
+        }
+        pessoa.setStatus(StatusPessoa.REPROVADO);
+        pessoa.setReprovadoPor(reprovadoPor);
+        pessoa.setReprovadoEm(Instant.now(clock));
         return pessoaRepository.save(pessoa);
     }
 

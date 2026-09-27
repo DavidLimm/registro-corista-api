@@ -73,12 +73,21 @@ public class Pessoa {
     @Column(name = "consentimento_lgpd_em")
     private Instant consentimentoLgpdEm;
 
-    // trilha de aprovação; FK para app_user será adicionada na migration de app_user, por isso ainda é só o UUID
+    // trilha de aprovação. De propósito sem FK para app_user (V11 chegou a adicionar, V12 reverteu): ainda não
+    // existe endpoint de aprovação nem autenticação, então não há garantia de que o valor gravado aqui corresponda
+    // a um app_user real. Reavaliar quando esse endpoint existir.
     @Column(name = "aprovado_por")
     private UUID aprovadoPor;
 
     @Column(name = "aprovado_em")
     private Instant aprovadoEm;
+
+    // mesmo raciocínio de aprovadoPor: de propósito sem FK para app_user por ora
+    @Column(name = "reprovado_por")
+    private UUID reprovadoPor;
+
+    @Column(name = "reprovado_em")
+    private Instant reprovadoEm;
 
     @CreationTimestamp
     @Column(name = "criado_em", nullable = false, updatable = false)

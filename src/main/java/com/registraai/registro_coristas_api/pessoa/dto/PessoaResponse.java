@@ -24,6 +24,8 @@ public record PessoaResponse(
         Instant consentimentoLgpdEm,
         UUID aprovadoPor,
         Instant aprovadoEm,
+        UUID reprovadoPor,
+        Instant reprovadoEm,
         Instant criadoEm,
         Instant atualizadoEm
 ) {
@@ -44,6 +46,8 @@ public record PessoaResponse(
                 pessoa.getConsentimentoLgpdEm(),
                 pessoa.getAprovadoPor(),
                 pessoa.getAprovadoEm(),
+                pessoa.getReprovadoPor(),
+                pessoa.getReprovadoEm(),
                 pessoa.getCriadoEm(),
                 pessoa.getAtualizadoEm()
         );
