@@ -77,13 +77,20 @@ docker compose up -d
 - **Classificação de faixa etária:**
     - Faixa etária real: derivada da data de nascimento, nunca gravada. Adolescente até 17a 11m 30d; jovem a partir de 18a.
     - `lista_classificacao` (ADOLESCENTE | JOVEM): campo gravado em `Corista`, por padrão segue a idade.
-    - **Promoção antecipada:** só o `LIDER_MOCIDADE` pode promover um adolescente para a lista de jovens. Apenas nesse sentido, **permanente**, com trilha (`promovido_por`, `promovido_em`). Menor promovido continua menor → proteções LGPD seguem valendo.
-- **Workflow de cadastro:** self-service entra como `PENDENTE` → aprovação por `PRESBITERO` (ou papel superior) → `APROVADO`. Remoção = soft delete (`INATIVO`), nunca DELETE físico.
-- **Regras de escopo do RBAC** (nomes conforme `V7__role_table.sql` — ver também a seção "Escopo de acesso por Área" abaixo):
+    - **Promoção antecipada:** só o `LIDER_MOCIDADE` pode promover um adolescente para a lista de jovens. Apenas nesse sentido, **permanente**, com trilha (`promovido_por`, `promovido_em`). Menor promovido continua menor → proteções LGPD seguem valendo. A aprovação/reprovação de cadastro (abaixo) **nunca** muda `lista_classificacao` — são mecanismos independentes.
+- **Workflow de cadastro (revisado em 2026-09-27):** todo mundo pode se auto-cadastrar e já sair com login (`AppUser`) — `Pessoa`/`Corista` e `AppUser` nascem juntos na mesma requisição quando o cliente informa e-mail/senha (ver `CoristaRequest.usuario`). Tudo nasce `PENDENTE`. O papel do `AppUser` nesse auto-cadastro é sempre derivado (`CORISTA_ADOLESCENTES`/`CORISTA_JOVENS` pela lista de classificação) — nunca escolhido pelo cliente, para não permitir auto-atribuição de papel. A partir de `PENDENTE`, um líder aprova (`PENDENTE -> APROVADO`) ou reprova (`PENDENTE -> REPROVADO`, status próprio, distinto de `INATIVO`). O "acesso" de fato (login funcionar) só vale após `APROVADO` — mas isso ainda depende da autenticação, que não existe (ver seção abaixo). Remoção continua sendo soft delete (`INATIVO`), nunca DELETE físico.
+- **Quem aprova/reprova (revisado em 2026-09-27 — tira essa exclusividade do `PRESBITERO`):**
+    - Adolescentes: `DIRIGENTE_UNIAO` (dirigente da união, verifica se a pessoa é mesmo da congregação).
+    - Jovens: `LIDERANCA_GRUPO_JOVEM` e `DIRIGENTE_CAMPANHA`.
+    - Na prática, qualquer papel de liderança pode aprovar/reprovar (`LIDER_MOCIDADE`/`LIDER_JOVENS`/`LIDER_ADOLESCENTES` inclusos) — a validação de **qual líder pode aprovar o quê** (por role + recorte adolescente/jovem) é regra de autorização que só entra quando a autenticação existir; os endpoints (`PATCH /pessoas/{id}/aprovar` `/reprovar`, espelhados em `/coristas`) já existem mas recebem `aprovadoPor`/`reprovadoPor` como parâmetro cru, sem checar se quem chamou tinha o papel certo (TODO marcado no código).
+    - `PRESBITERO` deixou de aprovar/reprovar por padrão: hoje é só acesso a dashboards (mesma lógica de "pode ou não aprovar" fica a critério de cada liderança, não dele).
+- **Regras de escopo do RBAC** (nomes conforme `V7__role_table.sql`/`V13__novos_roles_aprovacao.sql` — ver também a seção "Escopo de acesso por Área" abaixo):
     - `ADMIN`: global
     - `PASTOR`: área (leitura geral)
-    - `PRESBITERO`: congregação
+    - `PRESBITERO`: congregação (dashboards; não aprova/reprova por padrão — ver acima)
     - `LIDER_MOCIDADE` / `LIDER_JOVENS` / `LIDER_ADOLESCENTES`: área, com restrições ao recorte da mocidade
+    - `DIRIGENTE_UNIAO`: área; aprova/reprova cadastro de adolescentes
+    - `LIDERANCA_GRUPO_JOVEM` / `DIRIGENTE_CAMPANHA`: área; aprovam/reprovam cadastro de jovens
     - `MAESTRO_ADOLESCENTES` / `MAESTRO_JOVENS`: restrito ao seu recorte
     - `APOIO_ADOLESCENTES` / `APOIO_JOVENS`: acesso operacional limitado ao seu recorte
     - `CORISTA_ADOLESCENTES` / `CORISTA_JOVENS`: apenas o próprio perfil + ver eventos do seu escopo
@@ -93,7 +100,7 @@ docker compose up -d
 
 **Ainda não existe nenhuma infraestrutura de autenticação/autorização no projeto** (sem Spring Security configurado, sem JWT, sem login, sem forma de saber "quem é o usuário atual" em uma requisição). O que segue são as regras que devem ser aplicadas **quando** essa parte for construída — não implementar nada disto agora, é só o registro da decisão para não perder o rumo.
 
-**Roles** (`V7__role_table.sql`, tabela `role`): `ADMIN`, `PASTOR`, `PRESBITERO`, `LIDER_MOCIDADE`, `LIDER_JOVENS`, `LIDER_ADOLESCENTES`, `APOIO_ADOLESCENTES`, `APOIO_JOVENS`, `MAESTRO_ADOLESCENTES`, `MAESTRO_JOVENS`, `CORISTA_ADOLESCENTES`, `CORISTA_JOVENS`.
+**Roles** (`V7__role_table.sql` + `V13__novos_roles_aprovacao.sql`, tabela `role`): `ADMIN`, `PASTOR`, `PRESBITERO`, `LIDER_MOCIDADE`, `LIDER_JOVENS`, `LIDER_ADOLESCENTES`, `DIRIGENTE_UNIAO`, `LIDERANCA_GRUPO_JOVEM`, `DIRIGENTE_CAMPANHA`, `APOIO_ADOLESCENTES`, `APOIO_JOVENS`, `MAESTRO_ADOLESCENTES`, `MAESTRO_JOVENS`, `CORISTA_ADOLESCENTES`, `CORISTA_JOVENS`.
 
 > Nomenclatura padronizada em 2026-09-25: a seção "Regras de escopo do RBAC" (acima) usava nomes antigos (`RESP_MOCIDADE`, `RESP_JOVEM`, `RESP_ADOLESCENTE`, `MAESTRO`, `APOIO`, `CORISTA`) — já atualizada para usar exatamente estes nomes seedados no banco. Mesma padronização aplicada em `ListaClassificacao` (Javadoc), `StatusPessoa` (Javadoc) e `README.md`.
 
@@ -117,7 +124,10 @@ Qualquer mudança nesses pontos exige confirmação explícita do responsável p
 - Toda alteração de schema deve ser feita via migration **Flyway**, nunca via `ddl-auto: update`. Em dev/prod usar `ddl-auto: validate`
 - ⚠️ **Spring Boot 4:** o Flyway NÃO é mais auto-configurado só com `flyway-core`. É obrigatório usar `spring-boot-starter-flyway` + `flyway-database-postgresql`, senão as migrations não rodam (silenciosamente). Mesma lógica para módulos de teste: `spring-boot-starter-<tech>-test`.
 - Migrations são versionadas e nunca devem ser editadas após aplicadas — criar uma nova migration para correções
-- Ordem atual: V1 endereco · V2 area · V3 congregacao · V4 pessoa · V5 telefone · V6 corista · V7 role · (próximas: app_user/role, event)
+- Ordem atual: V1 endereco · V2 area · V3 congregacao · V4 pessoa · V5 telefone · V6 corista · V7 role ·
+  V8/V9 ajustes de corista · V10 soft delete/trilha em role · V11 app_user/app_user_role · V12 reverte FKs
+  prematuras de V11 (pessoa.aprovado_por/corista.promovido_por) · V13 novos roles de aprovação + descrição do
+  PRESBITERO · V14 status REPROVADO em pessoa (próxima: event)
 
 ## Observabilidade
 
