@@ -25,6 +25,6 @@ public record AppUserRequest(
         String senha,
 
         @NotEmpty
-        Set<UUID> roleIds
+        Set<@NotNull UUID> roleIds
 ) {
 }

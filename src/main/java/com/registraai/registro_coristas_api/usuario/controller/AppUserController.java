@@ -5,7 +5,10 @@ import com.registraai.registro_coristas_api.usuario.dto.AppUserResponse;
 import com.registraai.registro_coristas_api.usuario.model.AppUser;
 import com.registraai.registro_coristas_api.usuario.service.AppUserService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.web.PagedModel;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,7 +23,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -40,9 +42,12 @@ public class AppUserController {
         return ResponseEntity.created(location).body(AppUserResponse.de(appUser));
     }
 
+    /** Paginada e ordenada por e-mail. Filtro opcional: {@code ativo}. */
     @GetMapping
-    public List<AppUserResponse> listar(@RequestParam(required = false) Boolean ativo) {
-        return appUserService.listar(ativo).stream().map(AppUserResponse::de).toList();
+    public PagedModel<AppUserResponse> listar(@RequestParam(required = false) Boolean ativo,
+                                              @RequestParam(defaultValue = "0") @Min(0) int page,
+                                              @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        return new PagedModel<>(appUserService.listar(ativo, page, size).map(AppUserResponse::de));
     }
 
     @GetMapping("/{id}")
