@@ -13,8 +13,8 @@ import com.registraai.registro_coristas_api.pessoa.dto.PessoaRequest;
 import com.registraai.registro_coristas_api.pessoa.exception.ResponsavelLegalObrigatorioException;
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
 import com.registraai.registro_coristas_api.pessoa.service.PessoaService;
-import com.registraai.registro_coristas_api.usuario.dto.AppUserCredenciaisRequest;
-import com.registraai.registro_coristas_api.usuario.service.AppUserService;
+import com.registraai.registro_coristas_api.usuario.dto.UsuarioCredenciaisRequest;
+import com.registraai.registro_coristas_api.usuario.service.UsuarioService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -60,7 +60,7 @@ class CoristaServiceTest {
     private PessoaService pessoaService;
 
     @Mock
-    private AppUserService appUserService;
+    private UsuarioService usuarioService;
 
     private CoristaService coristaService;
 
@@ -69,7 +69,7 @@ class CoristaServiceTest {
 
     @BeforeEach
     void criarService() {
-        coristaService = new CoristaService(coristaRepository, pessoaService, appUserService, RELOGIO);
+        coristaService = new CoristaService(coristaRepository, pessoaService, usuarioService, RELOGIO);
     }
 
     private Pessoa pessoa(LocalDate nascimento) {
@@ -142,13 +142,13 @@ class CoristaServiceTest {
     }
 
     @Test
-    void criar_semUsuario_naoChamaAppUserService() {
+    void criar_semUsuario_naoChamaUsuarioService() {
         when(pessoaService.criar(pessoaRequest)).thenReturn(pessoa(ADULTO));
         repositorioDevolveOQueRecebe();
 
         coristaService.criar(requestPadrao());
 
-        verify(appUserService, never()).criarComPapelUnico(any(), any(), any(), any());
+        verify(usuarioService, never()).criarComPapelUnico(any(), any(), any(), any());
     }
 
     @Test
@@ -157,11 +157,11 @@ class CoristaServiceTest {
         when(pessoaService.criar(pessoaRequest)).thenReturn(pessoa);
         repositorioDevolveOQueRecebe();
         CoristaRequest request = new CoristaRequest(pessoaRequest, TipoVoz.SOPRANO, TamanhoCamisa.M, null,
-                new AppUserCredenciaisRequest("ana@exemplo.com", "senhaForte123"));
+                new UsuarioCredenciaisRequest("ana@exemplo.com", "senhaForte123"));
 
         coristaService.criar(request);
 
-        verify(appUserService).criarComPapelUnico(pessoa, "ana@exemplo.com", "senhaForte123", "CORISTA_ADOLESCENTES");
+        verify(usuarioService).criarComPapelUnico(pessoa, "ana@exemplo.com", "senhaForte123", "CORISTA_ADOLESCENTES");
     }
 
     @Test
@@ -170,11 +170,11 @@ class CoristaServiceTest {
         when(pessoaService.criar(pessoaRequest)).thenReturn(pessoa);
         repositorioDevolveOQueRecebe();
         CoristaRequest request = new CoristaRequest(pessoaRequest, TipoVoz.SOPRANO, TamanhoCamisa.M, null,
-                new AppUserCredenciaisRequest("bia@exemplo.com", "senhaForte123"));
+                new UsuarioCredenciaisRequest("bia@exemplo.com", "senhaForte123"));
 
         coristaService.criar(request);
 
-        verify(appUserService).criarComPapelUnico(pessoa, "bia@exemplo.com", "senhaForte123", "CORISTA_JOVENS");
+        verify(usuarioService).criarComPapelUnico(pessoa, "bia@exemplo.com", "senhaForte123", "CORISTA_JOVENS");
     }
 
     // ---------- buscar / listar ----------

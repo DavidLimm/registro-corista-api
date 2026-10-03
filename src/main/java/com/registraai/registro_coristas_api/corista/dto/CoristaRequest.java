@@ -3,7 +3,7 @@ package com.registraai.registro_coristas_api.corista.dto;
 import com.registraai.registro_coristas_api.corista.model.TamanhoCamisa;
 import com.registraai.registro_coristas_api.corista.model.TipoVoz;
 import com.registraai.registro_coristas_api.pessoa.dto.PessoaRequest;
-import com.registraai.registro_coristas_api.usuario.dto.AppUserCredenciaisRequest;
+import com.registraai.registro_coristas_api.usuario.dto.UsuarioCredenciaisRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -14,7 +14,7 @@ import jakarta.validation.constraints.Size;
  * {@code usuario} é opcional: quando enviado no cadastro (auto-cadastro), pessoa/corista/usuário nascem juntos,
  * todos {@code PENDENTE} — o papel do usuário é sempre {@code CORISTA_ADOLESCENTES}/{@code CORISTA_JOVENS}
  * conforme a lista de classificação, nunca escolhido pelo cliente. Em edição ({@code PUT}), é ignorado (a pessoa
- * vinculada ao usuário é imutável — ver {@code AppUserService.atualizar}).
+ * vinculada ao usuário é imutável — ver {@code UsuarioService.atualizar}).
  */
 public record CoristaRequest(
 
@@ -31,6 +31,6 @@ public record CoristaRequest(
         String ocupacao,
 
         @Valid
-        AppUserCredenciaisRequest usuario
+        UsuarioCredenciaisRequest usuario
 ) {
 }

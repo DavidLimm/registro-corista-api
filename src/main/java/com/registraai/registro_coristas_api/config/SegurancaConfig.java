@@ -10,7 +10,7 @@ public class SegurancaConfig {
 
     /**
      * Só o hash da senha, sem autenticação/login (ainda não implementados — ver AGENTS.md). Usado ao gravar
-     * {@code AppUser.senhaHash}; nunca gravar senha em texto puro.
+     * {@code Usuario.senhaHash}; nunca gravar senha em texto puro.
      */
     @Bean
     public PasswordEncoder passwordEncoder() {

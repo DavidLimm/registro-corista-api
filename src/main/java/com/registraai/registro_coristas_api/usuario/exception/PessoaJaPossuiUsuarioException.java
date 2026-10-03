@@ -5,7 +5,7 @@ import org.springframework.web.ErrorResponseException;
 
 import java.util.UUID;
 
-/** Uma pessoa tem no máximo um AppUser (relação 1:1). Renderizada como Problem Details com status 409. */
+/** Uma pessoa tem no máximo um usuário (relação 1:1). Renderizada como Problem Details com status 409. */
 public class PessoaJaPossuiUsuarioException extends ErrorResponseException {
 
     public PessoaJaPossuiUsuarioException(UUID pessoaId) {

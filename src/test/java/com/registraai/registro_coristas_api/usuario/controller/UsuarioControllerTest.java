@@ -5,13 +5,13 @@ import com.registraai.registro_coristas_api.pessoa.model.StatusPessoa;
 import com.registraai.registro_coristas_api.role.exception.RoleInativaException;
 import com.registraai.registro_coristas_api.role.exception.RoleNaoEncontradaException;
 import com.registraai.registro_coristas_api.role.model.Role;
-import com.registraai.registro_coristas_api.usuario.dto.AppUserRequest;
-import com.registraai.registro_coristas_api.usuario.exception.AppUserNaoEncontradoException;
-import com.registraai.registro_coristas_api.usuario.exception.AppUserPessoaImutavelException;
+import com.registraai.registro_coristas_api.usuario.dto.UsuarioRequest;
+import com.registraai.registro_coristas_api.usuario.exception.UsuarioNaoEncontradoException;
+import com.registraai.registro_coristas_api.usuario.exception.UsuarioPessoaImutavelException;
 import com.registraai.registro_coristas_api.usuario.exception.EmailDuplicadoException;
 import com.registraai.registro_coristas_api.usuario.exception.PessoaJaPossuiUsuarioException;
-import com.registraai.registro_coristas_api.usuario.model.AppUser;
-import com.registraai.registro_coristas_api.usuario.service.AppUserService;
+import com.registraai.registro_coristas_api.usuario.model.Usuario;
+import com.registraai.registro_coristas_api.usuario.service.UsuarioService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -41,8 +41,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(AppUserController.class)
-class AppUserControllerTest {
+@WebMvcTest(UsuarioController.class)
+class UsuarioControllerTest {
 
     private static final UUID PESSOA_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID ROLE_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
@@ -60,13 +60,13 @@ class AppUserControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private AppUserService appUserService;
+    private UsuarioService usuarioService;
 
-    private AppUser appUserPersistido(UUID id) {
+    private Usuario usuarioPersistido(UUID id) {
         Instant agora = Instant.parse("2026-09-20T12:00:00Z");
         Pessoa pessoa = Pessoa.builder().id(PESSOA_ID).nome("Maria da Silva").status(StatusPessoa.APROVADO).build();
         Role role = Role.builder().id(ROLE_ID).nome("CORISTA_JOVENS").descricao("Corista jovem").ativo(true).build();
-        return AppUser.builder().id(id).pessoa(pessoa).email("maria@exemplo.com").senhaHash("hash")
+        return Usuario.builder().id(id).pessoa(pessoa).email("maria@exemplo.com").senhaHash("hash")
                 .ativo(true).roles(Set.of(role)).criadoEm(agora).atualizadoEm(agora).build();
     }
 
@@ -75,7 +75,7 @@ class AppUserControllerTest {
     @Test
     void criar_retorna201ComLocationENuncaExpoeSenha() throws Exception {
         UUID id = UUID.randomUUID();
-        when(appUserService.criar(any(AppUserRequest.class))).thenReturn(appUserPersistido(id));
+        when(usuarioService.criar(any(UsuarioRequest.class))).thenReturn(usuarioPersistido(id));
 
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isCreated())
@@ -96,7 +96,7 @@ class AppUserControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
 
-        verifyNoInteractions(appUserService);
+        verifyNoInteractions(usuarioService);
     }
 
     @Test
@@ -107,7 +107,7 @@ class AppUserControllerTest {
                         """))
                 .andExpect(status().isBadRequest());
 
-        verifyNoInteractions(appUserService);
+        verifyNoInteractions(usuarioService);
     }
 
     @Test
@@ -118,7 +118,7 @@ class AppUserControllerTest {
                         """))
                 .andExpect(status().isBadRequest());
 
-        verifyNoInteractions(appUserService);
+        verifyNoInteractions(usuarioService);
     }
 
     @Test
@@ -129,7 +129,7 @@ class AppUserControllerTest {
                         """))
                 .andExpect(status().isBadRequest());
 
-        verifyNoInteractions(appUserService);
+        verifyNoInteractions(usuarioService);
     }
 
     @Test
@@ -140,12 +140,12 @@ class AppUserControllerTest {
                         """))
                 .andExpect(status().isBadRequest());
 
-        verifyNoInteractions(appUserService);
+        verifyNoInteractions(usuarioService);
     }
 
     @Test
     void criar_pessoaJaTemUsuario_retorna409() throws Exception {
-        when(appUserService.criar(any(AppUserRequest.class))).thenThrow(new PessoaJaPossuiUsuarioException(PESSOA_ID));
+        when(usuarioService.criar(any(UsuarioRequest.class))).thenThrow(new PessoaJaPossuiUsuarioException(PESSOA_ID));
 
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isConflict());
@@ -153,7 +153,7 @@ class AppUserControllerTest {
 
     @Test
     void criar_emailDuplicado_retorna409() throws Exception {
-        when(appUserService.criar(any(AppUserRequest.class))).thenThrow(new EmailDuplicadoException("maria@exemplo.com"));
+        when(usuarioService.criar(any(UsuarioRequest.class))).thenThrow(new EmailDuplicadoException("maria@exemplo.com"));
 
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isConflict());
@@ -161,7 +161,7 @@ class AppUserControllerTest {
 
     @Test
     void criar_roleInexistente_retorna404() throws Exception {
-        when(appUserService.criar(any(AppUserRequest.class))).thenThrow(new RoleNaoEncontradaException(ROLE_ID));
+        when(usuarioService.criar(any(UsuarioRequest.class))).thenThrow(new RoleNaoEncontradaException(ROLE_ID));
 
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isNotFound());
@@ -169,7 +169,7 @@ class AppUserControllerTest {
 
     @Test
     void criar_roleInativa_retorna409() throws Exception {
-        when(appUserService.criar(any(AppUserRequest.class))).thenThrow(new RoleInativaException("CORISTA_JOVENS"));
+        when(usuarioService.criar(any(UsuarioRequest.class))).thenThrow(new RoleInativaException("CORISTA_JOVENS"));
 
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isConflict());
@@ -180,8 +180,8 @@ class AppUserControllerTest {
     @Test
     void listar_repassaFiltroEPaginacaoEDevolveOsMetadadosDaPagina() throws Exception {
         UUID id = UUID.randomUUID();
-        var pagina = new PageImpl<>(List.of(appUserPersistido(id)), PageRequest.of(1, 5), 11);
-        when(appUserService.listar(true, 1, 5)).thenReturn(pagina);
+        var pagina = new PageImpl<>(List.of(usuarioPersistido(id)), PageRequest.of(1, 5), 11);
+        when(usuarioService.listar(true, 1, 5)).thenReturn(pagina);
 
         mockMvc.perform(get("/v1/api/usuarios").param("ativo", "true").param("page", "1").param("size", "5"))
                 .andExpect(status().isOk())
@@ -195,13 +195,13 @@ class AppUserControllerTest {
 
     @Test
     void listar_semParametros_usaPaginaZeroTamanhoVinteESemFiltro() throws Exception {
-        when(appUserService.listar(null, 0, 20)).thenReturn(new PageImpl<>(List.of()));
+        when(usuarioService.listar(null, 0, 20)).thenReturn(new PageImpl<>(List.of()));
 
         mockMvc.perform(get("/v1/api/usuarios"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(0));
 
-        verify(appUserService).listar(null, 0, 20);
+        verify(usuarioService).listar(null, 0, 20);
     }
 
     @Test
@@ -210,7 +210,7 @@ class AppUserControllerTest {
         mockMvc.perform(get("/v1/api/usuarios").param("size", "0")).andExpect(status().isBadRequest());
         mockMvc.perform(get("/v1/api/usuarios").param("page", "-1")).andExpect(status().isBadRequest());
 
-        verifyNoInteractions(appUserService);
+        verifyNoInteractions(usuarioService);
     }
 
     // ---------- buscar / atualizar / inativar / reativar ----------
@@ -218,7 +218,7 @@ class AppUserControllerTest {
     @Test
     void buscarPorId_retorna200() throws Exception {
         UUID id = UUID.randomUUID();
-        when(appUserService.buscarPorId(id)).thenReturn(appUserPersistido(id));
+        when(usuarioService.buscarPorId(id)).thenReturn(usuarioPersistido(id));
 
         mockMvc.perform(get("/v1/api/usuarios/{id}", id))
                 .andExpect(status().isOk())
@@ -228,7 +228,7 @@ class AppUserControllerTest {
     @Test
     void buscarPorId_inexistente_retorna404ComProblemDetails() throws Exception {
         UUID id = UUID.randomUUID();
-        when(appUserService.buscarPorId(id)).thenThrow(new AppUserNaoEncontradoException(id));
+        when(usuarioService.buscarPorId(id)).thenThrow(new UsuarioNaoEncontradoException(id));
 
         mockMvc.perform(get("/v1/api/usuarios/{id}", id))
                 .andExpect(status().isNotFound())
@@ -239,7 +239,7 @@ class AppUserControllerTest {
     @Test
     void atualizar_retorna200() throws Exception {
         UUID id = UUID.randomUUID();
-        when(appUserService.atualizar(eq(id), any(AppUserRequest.class))).thenReturn(appUserPersistido(id));
+        when(usuarioService.atualizar(eq(id), any(UsuarioRequest.class))).thenReturn(usuarioPersistido(id));
 
         mockMvc.perform(put("/v1/api/usuarios/{id}", id).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isOk())
@@ -249,7 +249,7 @@ class AppUserControllerTest {
     @Test
     void atualizar_pessoaImutavel_retorna409() throws Exception {
         UUID id = UUID.randomUUID();
-        when(appUserService.atualizar(eq(id), any(AppUserRequest.class))).thenThrow(new AppUserPessoaImutavelException());
+        when(usuarioService.atualizar(eq(id), any(UsuarioRequest.class))).thenThrow(new UsuarioPessoaImutavelException());
 
         mockMvc.perform(put("/v1/api/usuarios/{id}", id).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isConflict());
@@ -258,7 +258,7 @@ class AppUserControllerTest {
     @Test
     void atualizar_inexistente_retorna404() throws Exception {
         UUID id = UUID.randomUUID();
-        when(appUserService.atualizar(eq(id), any(AppUserRequest.class))).thenThrow(new AppUserNaoEncontradoException(id));
+        when(usuarioService.atualizar(eq(id), any(UsuarioRequest.class))).thenThrow(new UsuarioNaoEncontradoException(id));
 
         mockMvc.perform(put("/v1/api/usuarios/{id}", id).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isNotFound());
@@ -270,13 +270,13 @@ class AppUserControllerTest {
 
         mockMvc.perform(delete("/v1/api/usuarios/{id}", id)).andExpect(status().isNoContent());
 
-        verify(appUserService).inativar(id);
+        verify(usuarioService).inativar(id);
     }
 
     @Test
     void inativar_inexistente_retorna404() throws Exception {
         UUID id = UUID.randomUUID();
-        doThrow(new AppUserNaoEncontradoException(id)).when(appUserService).inativar(id);
+        doThrow(new UsuarioNaoEncontradoException(id)).when(usuarioService).inativar(id);
 
         mockMvc.perform(delete("/v1/api/usuarios/{id}", id)).andExpect(status().isNotFound());
     }
@@ -284,7 +284,7 @@ class AppUserControllerTest {
     @Test
     void reativar_retorna200() throws Exception {
         UUID id = UUID.randomUUID();
-        when(appUserService.reativar(id)).thenReturn(appUserPersistido(id));
+        when(usuarioService.reativar(id)).thenReturn(usuarioPersistido(id));
 
         mockMvc.perform(patch("/v1/api/usuarios/{id}/reativar", id))
                 .andExpect(status().isOk())

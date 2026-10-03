@@ -36,14 +36,14 @@ Regras:
 Uma pessoa é representada **uma única vez**. Papéis são vínculos, não tabelas duplicadas.
 
 ```
-Apoio / Maestro / Pastor:      AppUser → Pessoa
-Corista (adolescente/jovem):   AppUser → Pessoa → Corista
+Apoio / Maestro / Pastor:      Usuario → Pessoa
+Corista (adolescente/jovem):   Usuario → Pessoa → Corista
 ```
 
 - **`Pessoa`**: dados comuns a todos (nome, data de nascimento, endereço, telefone, congregação, status).
 - **`Corista`**: especialização **1:1** de `Pessoa` (FK `pessoa_id UNIQUE`), com os campos exclusivos de
   corista (tipo de voz, tamanho de camisa, ocupação, lista de classificação etc.).
-- Nem toda `Pessoa` tem `AppUser` (ex.: menor gerenciado pelo líder). Todo `AppUser` aponta para uma `Pessoa`.
+- Nem toda `Pessoa` tem `Usuario` (ex.: menor gerenciado pelo líder). Todo `Usuario` aponta para uma `Pessoa`.
 - Não existe entidade `Membro` única, nem corista como tabela solta que duplica dados de pessoa.
 
 ### Faixa etária e classificação
@@ -78,7 +78,7 @@ Prefixo comum: `/v1/api`.
 | **Endereço** | `POST /enderecos` · `GET /enderecos/{id}` · `PUT /enderecos/{id}` |
 | **Telefone** | `POST /pessoas/{pessoaId}/telefones` · `GET /pessoas/{pessoaId}/telefones` · `GET .../telefones/{id}` · `PUT .../telefones/{id}` · `DELETE .../telefones/{id}` |
 | **Role** | `POST /roles` · `GET /roles` · `GET /roles/{id}` · `PUT /roles/{id}` · `DELETE /roles/{id}` (soft) · `PATCH /roles/{id}/reativar` |
-| **Usuário** (`AppUser`) | `POST /usuarios` · `GET /usuarios` (paginado, filtro: ativo) · `GET /usuarios/{id}` · `PUT /usuarios/{id}` · `DELETE /usuarios/{id}` (soft) · `PATCH /usuarios/{id}/reativar` — senha gravada como hash (BCrypt); não exige pessoa `APROVADO` (auto-cadastro cria pessoa + usuário juntos, ainda `PENDENTE`) |
+| **Usuário** (`Usuario`) | `POST /usuarios` · `GET /usuarios` (paginado, filtro: ativo) · `GET /usuarios/{id}` · `PUT /usuarios/{id}` · `DELETE /usuarios/{id}` (soft) · `PATCH /usuarios/{id}/reativar` — senha gravada como hash (BCrypt); não exige pessoa `APROVADO` (auto-cadastro cria pessoa + usuário juntos, ainda `PENDENTE`) |
 
 `aprovar`/`reprovar` recebem `aprovadoPor`/`reprovadoPor` (UUID) como query param — ainda sem checagem de quem
 está chamando (depende da autenticação, que não existe: ver [Roadmap](#roadmap)).
@@ -154,10 +154,11 @@ docker compose --profile app up --build
 - Migrations são versionadas e nunca editadas após aplicadas; correções viram uma nova migration.
 - Ordem atual: `V1` endereço · `V2` área · `V3` congregação · `V4` pessoa · `V5` telefone · `V6` corista ·
   `V7` role · `V8`/`V9` ajustes de corista (tipo de voz, tamanho de camisa) · `V10` soft delete/trilha em role ·
-  `V11` app_user/app_user_role · `V12` reverte as FKs de `pessoa.aprovado_por`/`corista.promovido_por` que a V11
-  adiantou prematuramente (a promoção continua sem endpoint; a FK exigia um `app_user` real, e os testes usam UUID
+  `V11` app_user/app_user_role (renomeadas na `V15`) · `V12` reverte as FKs de `pessoa.aprovado_por`/`corista.promovido_por` que a V11
+  adiantou prematuramente (a promoção continua sem endpoint; a FK exigia um `usuario` real, e os testes usam UUID
   fictício pra simular quem aprovou) · `V13` novos roles de aprovação (`DIRIGENTE_UNIAO`, `LIDERANCA_GRUPO_JOVEM`,
-  `DIRIGENTE_CAMPANHA`) e descrição do `PRESBITERO` · `V14` status `REPROVADO` em pessoa.
+  `DIRIGENTE_CAMPANHA`) e descrição do `PRESBITERO` · `V14` status `REPROVADO` em pessoa · `V15` renomeia
+  `app_user` → `usuario` e `app_user_role` → `usuario_role`.
 
 ## Variáveis de ambiente
 
@@ -176,13 +177,13 @@ vêm da plataforma.
 ## Roadmap
 
 - **Autenticação/autorização** (Spring Security + JWT): ainda não implementada. Papéis (`role`) e usuários
-  (`app_user`, vinculado 1:1 a `Pessoa` e N:N a `Role`) já modelados no schema (`V7`/`V10`/`V11`/`V13`) e com CRUD
+  (`usuario`, vinculado 1:1 a `Pessoa` e N:N a `Role`) já modelados no schema (`V7`/`V10`/`V11`/`V13`) e com CRUD
   próprio; auto-cadastro já cria pessoa/corista + login juntos e os endpoints de aprovar/reprovar já existem —
   falta login (JWT), o filtro que identifica o usuário autenticado na requisição, e a checagem de que quem chama
   `aprovar`/`reprovar` tem mesmo o papel certo (hoje `aprovadoPor`/`reprovadoPor` é só um parâmetro cru). RBAC vai
   validar **role** + **vínculo geográfico** (área/congregação) sempre no backend. Regra decidida: `ADMIN` acesso
-  global · `PASTOR` até 2 áreas · demais papéis, exatamente 1 área — via tabela de junção `user_area` (não coluna
-  única em `AppUser`).
+  global · `PASTOR` até 2 áreas · demais papéis, exatamente 1 área — via tabela de junção `usuario_area` (não coluna
+  única em `Usuario`).
 - Módulo de **eventos**: adiado para outra versão (fora do escopo do MVP por ora).
 - Observabilidade: Actuator (health/readiness/liveness), Micrometer + Prometheus, Micrometer Tracing/OpenTelemetry,
   logs estruturados em JSON.

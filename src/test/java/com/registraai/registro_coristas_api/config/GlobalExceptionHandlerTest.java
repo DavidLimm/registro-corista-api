@@ -14,7 +14,7 @@ class GlobalExceptionHandlerTest {
     @Test
     void violacaoDeIntegridade_vira409ComProblemDetails() {
         ProblemDetail problemDetail = handler.tratarViolacaoDeIntegridade(
-                new DataIntegrityViolationException("uk_app_user_email"));
+                new DataIntegrityViolationException("uk_usuario_email"));
 
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
         assertThat(problemDetail.getDetail()).isEqualTo("O registro já existe ou viola uma restrição do banco de dados.");

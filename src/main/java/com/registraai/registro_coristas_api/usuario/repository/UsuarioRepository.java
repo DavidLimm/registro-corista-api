@@ -1,6 +1,6 @@
 package com.registraai.registro_coristas_api.usuario.repository;
 
-import com.registraai.registro_coristas_api.usuario.model.AppUser;
+import com.registraai.registro_coristas_api.usuario.model.Usuario;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -11,7 +11,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface AppUserRepository extends JpaRepository<AppUser, UUID>, JpaSpecificationExecutor<AppUser> {
+public interface UsuarioRepository extends JpaRepository<Usuario, UUID>, JpaSpecificationExecutor<Usuario> {
 
     boolean existsByEmail(String email);
 
@@ -19,13 +19,13 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID>, JpaSpec
 
     boolean existsByPessoaId(UUID pessoaId);
 
-    // tudo que o AppUserResponse acessa é LAZY e o open-in-view está desligado: carregar junto (só relações to-one
+    // tudo que o UsuarioResponse acessa é LAZY e o open-in-view está desligado: carregar junto (só relações to-one
     // ou coleção pequena de roles, então a paginação continua sendo feita no banco)
     @Override
     @EntityGraph(attributePaths = {"pessoa", "roles"})
-    Optional<AppUser> findById(UUID id);
+    Optional<Usuario> findById(UUID id);
 
     @Override
     @EntityGraph(attributePaths = {"pessoa", "roles"})
-    Page<AppUser> findAll(Specification<AppUser> spec, Pageable pageable);
+    Page<Usuario> findAll(Specification<Usuario> spec, Pageable pageable);
 }

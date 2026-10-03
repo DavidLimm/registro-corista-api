@@ -27,18 +27,18 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Credenciais de acesso de uma {@link Pessoa}. Nem toda pessoa tem um AppUser (ex.: menor gerenciado pelo líder),
- * mas todo AppUser aponta para exatamente uma pessoa (relação 1:1) — a identidade continua representada uma única
+ * Credenciais de acesso de uma {@link Pessoa}. Nem toda pessoa tem um usuário (ex.: menor gerenciado pelo líder),
+ * mas todo usuário aponta para exatamente uma pessoa (relação 1:1) — a identidade continua representada uma única
  * vez. Papéis (RBAC) são vínculos em {@link #roles}, nunca duplicação de cadastro.
  */
 @Entity
-@Table(name = "app_user")
+@Table(name = "usuario")
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AppUser {
+public class Usuario {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -62,8 +62,8 @@ public class AppUser {
     @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
-            name = "app_user_role",
-            joinColumns = @JoinColumn(name = "app_user_id"),
+            name = "usuario_role",
+            joinColumns = @JoinColumn(name = "usuario_id"),
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
     private Set<Role> roles = new HashSet<>();
