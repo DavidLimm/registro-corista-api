@@ -100,6 +100,24 @@ public class PessoaController {
         return PessoaResponse.de(pessoaService.reprovar(id, reprovadoPor), hoje());
     }
 
+    /**
+     * {@code APROVADO -> AFASTADO}. TODO(autenticação): só LIDER_MOCIDADE e PASTOR podem afastar (permissão
+     * {@code CORISTA_APROVAR_AFASTAMENTO}); por ora qualquer chamador informa qualquer {@code afastadoPor}.
+     */
+    @PatchMapping("/{id}/afastar")
+    public PessoaResponse afastar(@PathVariable UUID id, @RequestParam UUID afastadoPor) {
+        return PessoaResponse.de(pessoaService.afastar(id, afastadoPor), hoje());
+    }
+
+    /**
+     * {@code AFASTADO -> APROVADO}. TODO(autenticação): mesma permissão de {@link #afastar}
+     * ({@code CORISTA_APROVAR_AFASTAMENTO}); {@code retornadoPor} deve vir do usuário logado.
+     */
+    @PatchMapping("/{id}/retornar-do-afastamento")
+    public PessoaResponse retornarDoAfastamento(@PathVariable UUID id, @RequestParam UUID retornadoPor) {
+        return PessoaResponse.de(pessoaService.retornarDoAfastamento(id, retornadoPor), hoje());
+    }
+
     private LocalDate hoje() {
         return LocalDate.now(clock);
     }

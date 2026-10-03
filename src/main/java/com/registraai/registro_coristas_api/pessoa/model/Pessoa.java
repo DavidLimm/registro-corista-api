@@ -89,6 +89,13 @@ public class Pessoa {
     @Column(name = "reprovado_em")
     private Instant reprovadoEm;
 
+    // trilha do afastamento: preenchida só enquanto o status for AFASTADO (ver V19)
+    @Column(name = "afastado_por")
+    private UUID afastadoPor;
+
+    @Column(name = "afastado_em")
+    private Instant afastadoEm;
+
     @CreationTimestamp
     @Column(name = "criado_em", nullable = false, updatable = false)
     private Instant criadoEm;

@@ -127,6 +127,22 @@ public class CoristaService {
         return corista;
     }
 
+    /** {@code APROVADO -> AFASTADO}. O status fica na pessoa, então a regra é a mesma de {@code PessoaService.afastar}. */
+    @Transactional
+    public Corista afastar(UUID id, UUID afastadoPor) {
+        Corista corista = buscarPorId(id);
+        pessoaService.afastar(corista.getPessoa().getId(), afastadoPor);
+        return corista;
+    }
+
+    /** {@code AFASTADO -> APROVADO}. Mesma regra de {@link #afastar}. */
+    @Transactional
+    public Corista retornarDoAfastamento(UUID id, UUID retornadoPor) {
+        Corista corista = buscarPorId(id);
+        pessoaService.retornarDoAfastamento(corista.getPessoa().getId(), retornadoPor);
+        return corista;
+    }
+
     /**
      * Promoção antecipada ADOLESCENTE -> JOVEM: só nesse sentido, permanente, com trilha. Vale apenas para quem
      * ainda é adolescente pela idade; a pessoa continua menor (proteções LGPD seguem valendo). Ainda sem endpoint:

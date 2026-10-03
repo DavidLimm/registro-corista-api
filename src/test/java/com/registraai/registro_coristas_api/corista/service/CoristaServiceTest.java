@@ -315,6 +315,30 @@ class CoristaServiceTest {
         verify(pessoaService).reprovar(pessoa.getId(), reprovador);
     }
 
+    @Test
+    void afastar_delegaAoAfastamentoDaPessoaERetornaOCorista() {
+        UUID id = UUID.randomUUID();
+        UUID lider = UUID.randomUUID();
+        Pessoa pessoa = pessoa(ADULTO);
+        Corista corista = Corista.builder().id(id).pessoa(pessoa).build();
+        when(coristaRepository.findById(id)).thenReturn(Optional.of(corista));
+
+        assertThat(coristaService.afastar(id, lider)).isSameAs(corista);
+        verify(pessoaService).afastar(pessoa.getId(), lider);
+    }
+
+    @Test
+    void retornarDoAfastamento_delegaAoRetornoDaPessoaERetornaOCorista() {
+        UUID id = UUID.randomUUID();
+        UUID lider = UUID.randomUUID();
+        Pessoa pessoa = pessoa(ADULTO);
+        Corista corista = Corista.builder().id(id).pessoa(pessoa).build();
+        when(coristaRepository.findById(id)).thenReturn(Optional.of(corista));
+
+        assertThat(coristaService.retornarDoAfastamento(id, lider)).isSameAs(corista);
+        verify(pessoaService).retornarDoAfastamento(pessoa.getId(), lider);
+    }
+
     // ---------- promover ----------
 
     @Test

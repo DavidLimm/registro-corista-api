@@ -87,6 +87,21 @@ public class CoristaController {
         return CoristaResponse.de(coristaService.reprovar(id, reprovadoPor), hoje());
     }
 
+    /**
+     * {@code APROVADO -> AFASTADO}. TODO(autenticação): só LIDER_MOCIDADE e PASTOR (permissão
+     * {@code CORISTA_APROVAR_AFASTAMENTO}); ver {@code PessoaController.afastar}.
+     */
+    @PatchMapping("/{id}/afastar")
+    public CoristaResponse afastar(@PathVariable UUID id, @RequestParam UUID afastadoPor) {
+        return CoristaResponse.de(coristaService.afastar(id, afastadoPor), hoje());
+    }
+
+    /** {@code AFASTADO -> APROVADO}. Mesma ressalva de {@link #afastar}. */
+    @PatchMapping("/{id}/retornar-do-afastamento")
+    public CoristaResponse retornarDoAfastamento(@PathVariable UUID id, @RequestParam UUID retornadoPor) {
+        return CoristaResponse.de(coristaService.retornarDoAfastamento(id, retornadoPor), hoje());
+    }
+
     private LocalDate hoje() {
         return LocalDate.now(clock);
     }

@@ -12,5 +12,10 @@ public enum StatusPessoa {
     APROVADO,
     /** Cadastro rejeitado: nunca chegou a ser aprovado (diferente de {@link #INATIVO}, que é remoção). */
     REPROVADO,
+    /**
+     * Afastamento temporário de um cadastro aprovado (ex.: corista em pausa). Diferente de {@link #INATIVO}, que é
+     * remoção. Quem está afastado não tem acesso ao sistema (regra a aplicar na autenticação).
+     */
+    AFASTADO,
     INATIVO
 }
