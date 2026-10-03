@@ -9,7 +9,7 @@ import com.registraai.registro_coristas_api.corista.model.ListaClassificacao;
 import com.registraai.registro_coristas_api.corista.repository.CoristaRepository;
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
 import com.registraai.registro_coristas_api.pessoa.service.PessoaService;
-import com.registraai.registro_coristas_api.usuario.service.AppUserService;
+import com.registraai.registro_coristas_api.usuario.service.UsuarioService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -29,7 +29,7 @@ public class CoristaService {
 
     private final CoristaRepository coristaRepository;
     private final PessoaService pessoaService;
-    private final AppUserService appUserService;
+    private final UsuarioService usuarioService;
     private final Clock clock;
 
     /**
@@ -48,7 +48,7 @@ public class CoristaService {
         Corista salvo = coristaRepository.save(corista);
         if (request.usuario() != null) {
             String nomeDoRole = lista == ListaClassificacao.ADOLESCENTE ? "CORISTA_ADOLESCENTES" : "CORISTA_JOVENS";
-            appUserService.criarComPapelUnico(pessoa, request.usuario().email(), request.usuario().senha(), nomeDoRole);
+            usuarioService.criarComPapelUnico(pessoa, request.usuario().email(), request.usuario().senha(), nomeDoRole);
         }
         return salvo;
     }

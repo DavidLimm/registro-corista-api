@@ -1,9 +1,9 @@
 package com.registraai.registro_coristas_api.usuario.controller;
 
-import com.registraai.registro_coristas_api.usuario.dto.AppUserRequest;
-import com.registraai.registro_coristas_api.usuario.dto.AppUserResponse;
-import com.registraai.registro_coristas_api.usuario.model.AppUser;
-import com.registraai.registro_coristas_api.usuario.service.AppUserService;
+import com.registraai.registro_coristas_api.usuario.dto.UsuarioRequest;
+import com.registraai.registro_coristas_api.usuario.dto.UsuarioResponse;
+import com.registraai.registro_coristas_api.usuario.model.Usuario;
+import com.registraai.registro_coristas_api.usuario.service.UsuarioService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -28,47 +28,47 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/api/usuarios")
 @RequiredArgsConstructor
-public class AppUserController {
+public class UsuarioController {
 
-    private final AppUserService appUserService;
+    private final UsuarioService usuarioService;
 
     @PostMapping
-    public ResponseEntity<AppUserResponse> criar(@Valid @RequestBody AppUserRequest request) {
-        AppUser appUser = appUserService.criar(request);
+    public ResponseEntity<UsuarioResponse> criar(@Valid @RequestBody UsuarioRequest request) {
+        Usuario usuario = usuarioService.criar(request);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
-                .buildAndExpand(appUser.getId())
+                .buildAndExpand(usuario.getId())
                 .toUri();
-        return ResponseEntity.created(location).body(AppUserResponse.de(appUser));
+        return ResponseEntity.created(location).body(UsuarioResponse.de(usuario));
     }
 
     /** Paginada e ordenada por e-mail. Filtro opcional: {@code ativo}. */
     @GetMapping
-    public PagedModel<AppUserResponse> listar(@RequestParam(required = false) Boolean ativo,
+    public PagedModel<UsuarioResponse> listar(@RequestParam(required = false) Boolean ativo,
                                               @RequestParam(defaultValue = "0") @Min(0) int page,
                                               @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return new PagedModel<>(appUserService.listar(ativo, page, size).map(AppUserResponse::de));
+        return new PagedModel<>(usuarioService.listar(ativo, page, size).map(UsuarioResponse::de));
     }
 
     @GetMapping("/{id}")
-    public AppUserResponse buscarPorId(@PathVariable UUID id) {
-        return AppUserResponse.de(appUserService.buscarPorId(id));
+    public UsuarioResponse buscarPorId(@PathVariable UUID id) {
+        return UsuarioResponse.de(usuarioService.buscarPorId(id));
     }
 
     @PutMapping("/{id}")
-    public AppUserResponse atualizar(@PathVariable UUID id, @Valid @RequestBody AppUserRequest request) {
-        return AppUserResponse.de(appUserService.atualizar(id, request));
+    public UsuarioResponse atualizar(@PathVariable UUID id, @Valid @RequestBody UsuarioRequest request) {
+        return UsuarioResponse.de(usuarioService.atualizar(id, request));
     }
 
     /** Soft delete: marca o usuário como inativo (não remove a linha). */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> inativar(@PathVariable UUID id) {
-        appUserService.inativar(id);
+        usuarioService.inativar(id);
         return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/{id}/reativar")
-    public AppUserResponse reativar(@PathVariable UUID id) {
-        return AppUserResponse.de(appUserService.reativar(id));
+    public UsuarioResponse reativar(@PathVariable UUID id) {
+        return UsuarioResponse.de(usuarioService.reativar(id));
     }
 }

@@ -13,7 +13,7 @@ import java.util.UUID;
  * "trocar senha" ainda). A pessoa vinculada não pode mudar depois de criada: o service rejeita um {@code pessoaId}
  * diferente do já gravado.
  */
-public record AppUserRequest(
+public record UsuarioRequest(
 
         @NotNull
         UUID pessoaId,

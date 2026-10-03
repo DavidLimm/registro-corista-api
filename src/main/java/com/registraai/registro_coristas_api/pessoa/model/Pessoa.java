@@ -73,16 +73,16 @@ public class Pessoa {
     @Column(name = "consentimento_lgpd_em")
     private Instant consentimentoLgpdEm;
 
-    // trilha de aprovação. De propósito sem FK para app_user (V11 chegou a adicionar, V12 reverteu): ainda não
+    // trilha de aprovação. De propósito sem FK para `usuario` (V11 chegou a adicionar, V12 reverteu): ainda não
     // existe endpoint de aprovação nem autenticação, então não há garantia de que o valor gravado aqui corresponda
-    // a um app_user real. Reavaliar quando esse endpoint existir.
+    // a um usuário real. Reavaliar quando esse endpoint existir.
     @Column(name = "aprovado_por")
     private UUID aprovadoPor;
 
     @Column(name = "aprovado_em")
     private Instant aprovadoEm;
 
-    // mesmo raciocínio de aprovadoPor: de propósito sem FK para app_user por ora
+    // mesmo raciocínio de aprovadoPor: de propósito sem FK para `usuario` por ora
     @Column(name = "reprovado_por")
     private UUID reprovadoPor;
 

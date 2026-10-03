@@ -27,13 +27,13 @@ Stack: Java 21 + Spring Boot 4.1 + PostgreSQL 16 (Docker) + Spring Data JPA/Hibe
 Uma pessoa é representada **uma única vez**. Papéis são vínculos, não tabelas duplicadas.
 
 ```
-Apoio / Maestro / Pastor:      AppUser → Pessoa
-Corista (adolescente/jovem):   AppUser → Pessoa → Corista
+Apoio / Maestro / Pastor:      Usuario → Pessoa
+Corista (adolescente/jovem):   Usuario → Pessoa → Corista
 ```
 
 - `Pessoa` = dados comuns a todos (nome, data de nascimento, endereço, telefone, congregação, status).
 - `Corista` = especialização **1:1** de `Pessoa` (FK `pessoa_id UNIQUE`), com apenas os campos exclusivos de corista (tipo de voz, tamanho de camisa, ocupação, etc.). Isso evita tabela cheia de campos nulos **e** duplicação de identidade.
-- Nem toda `Pessoa` tem `AppUser` (ex.: menor gerenciado pelo líder). Todo `AppUser` aponta para uma `Pessoa`.
+- Nem toda `Pessoa` tem `Usuario` (ex.: menor gerenciado pelo líder). Todo `Usuario` aponta para uma `Pessoa`.
 - NÃO existe entidade `Membro` único. NÃO recriar corista como tabela solta que duplica dados de pessoa.
 
 ## Comandos
@@ -67,8 +67,8 @@ docker compose up -d
 - Lombok para reduzir boilerplate (getters/setters, builders)
 - DTOs como Records quando possível
 - Uso de `Optional<T>` para retornos que podem ser nulos — evitar retorno de `null` direto
-- Entidades: `Area`, `Congregacao`, `Pessoa`, `Corista`, `Endereco`, `Telefone`, `Evento`, `AppUser`, `Role`
-- Tabela de usuários nomeada `app_user` (não `user`) para evitar conflito com palavra reservada no PostgreSQL
+- Entidades: `Area`, `Congregacao`, `Pessoa`, `Corista`, `Endereco`, `Telefone`, `Evento`, `Usuario`, `Role`
+- Tabela de usuários nomeada `usuario` (não `user`) para evitar conflito com palavra reservada no PostgreSQL
 - IDs em `UUID` (`gen_random_uuid()`), padrão adotado nas migrations
 
 ## Regras de Negócio Críticas — Não Alterar Sem Confirmação
@@ -78,7 +78,7 @@ docker compose up -d
     - Faixa etária real: derivada da data de nascimento, nunca gravada. Adolescente até 17a 11m 30d; jovem a partir de 18a.
     - `lista_classificacao` (ADOLESCENTE | JOVEM): campo gravado em `Corista`, por padrão segue a idade.
     - **Promoção antecipada:** só o `LIDER_MOCIDADE` pode promover um adolescente para a lista de jovens. Apenas nesse sentido, **permanente**, com trilha (`promovido_por`, `promovido_em`). Menor promovido continua menor → proteções LGPD seguem valendo. A aprovação/reprovação de cadastro (abaixo) **nunca** muda `lista_classificacao` — são mecanismos independentes.
-- **Workflow de cadastro (revisado em 2026-09-27):** todo mundo pode se auto-cadastrar e já sair com login (`AppUser`) — `Pessoa`/`Corista` e `AppUser` nascem juntos na mesma requisição quando o cliente informa e-mail/senha (ver `CoristaRequest.usuario`). Tudo nasce `PENDENTE`. O papel do `AppUser` nesse auto-cadastro é sempre derivado (`CORISTA_ADOLESCENTES`/`CORISTA_JOVENS` pela lista de classificação) — nunca escolhido pelo cliente, para não permitir auto-atribuição de papel. A partir de `PENDENTE`, um líder aprova (`PENDENTE -> APROVADO`) ou reprova (`PENDENTE -> REPROVADO`, status próprio, distinto de `INATIVO`). O "acesso" de fato (login funcionar) só vale após `APROVADO` — mas isso ainda depende da autenticação, que não existe (ver seção abaixo). Remoção continua sendo soft delete (`INATIVO`), nunca DELETE físico.
+- **Workflow de cadastro (revisado em 2026-09-27):** todo mundo pode se auto-cadastrar e já sair com login (`Usuario`) — `Pessoa`/`Corista` e `Usuario` nascem juntos na mesma requisição quando o cliente informa e-mail/senha (ver `CoristaRequest.usuario`). Tudo nasce `PENDENTE`. O papel do `Usuario` nesse auto-cadastro é sempre derivado (`CORISTA_ADOLESCENTES`/`CORISTA_JOVENS` pela lista de classificação) — nunca escolhido pelo cliente, para não permitir auto-atribuição de papel. A partir de `PENDENTE`, um líder aprova (`PENDENTE -> APROVADO`) ou reprova (`PENDENTE -> REPROVADO`, status próprio, distinto de `INATIVO`). O "acesso" de fato (login funcionar) só vale após `APROVADO` — mas isso ainda depende da autenticação, que não existe (ver seção abaixo). Remoção continua sendo soft delete (`INATIVO`), nunca DELETE físico.
 - **Quem aprova/reprova (revisado em 2026-09-27 — tira essa exclusividade do `PRESBITERO`):**
     - Adolescentes: `DIRIGENTE_UNIAO` (dirigente da união, verifica se a pessoa é mesmo da congregação).
     - Jovens: `LIDERANCA_GRUPO_JOVEM` e `DIRIGENTE_CAMPANHA`.
@@ -110,10 +110,10 @@ docker compose up -d
 - Todas as demais roles (`LIDER_MOCIDADE` para baixo — líderes, apoio, maestros, coristas): designadas a **exatamente 1 área**.
 - Motivação: dashboards futuros (ex.: "quantos jovens ao todo", "quantos por área", "quantos por congregação") dependem desse vínculo para filtrar o que cada usuário pode ver — `ADMIN` vê tudo, os demais só o recorte da(s) sua(s) área(s).
 
-**Modelo de dados recomendado (ainda não criado):** uma tabela de junção `user_area` (many-to-many entre `AppUser` e `Area`), e não uma coluna `area_id` direto em `AppUser` — porque `PASTOR` pode ter 2 áreas, o que uma coluna única não suporta. A validação de quantidade máxima (1 para a maioria, 2 para `PASTOR`, nenhuma exigida para `ADMIN`) é regra de negócio da camada `Service`, não constraint de banco.
+**Modelo de dados recomendado (ainda não criado):** uma tabela de junção `usuario_area` (many-to-many entre `Usuario` e `Area`), e não uma coluna `area_id` direto em `Usuario` — porque `PASTOR` pode ter 2 áreas, o que uma coluna única não suporta. A validação de quantidade máxima (1 para a maioria, 2 para `PASTOR`, nenhuma exigida para `ADMIN`) é regra de negócio da camada `Service`, não constraint de banco.
 
 **Quando a autenticação for implementada:**
-1. Login + emissão de JWT usando `AppUser.email`/`passwordHash` (já existem no schema).
+1. Login + emissão de JWT usando `Usuario.email`/`senhaHash` (já existem no schema).
 2. `SecurityConfig` + filtro que extrai o usuário autenticado da requisição.
 3. Toda consulta que lista/filtra por área (ou por congregação, para roles com esse recorte — ver seção acima) deve aplicar o vínculo de `user_area` do usuário autenticado, exceto `ADMIN`.
 
@@ -125,9 +125,10 @@ Qualquer mudança nesses pontos exige confirmação explícita do responsável p
 - ⚠️ **Spring Boot 4:** o Flyway NÃO é mais auto-configurado só com `flyway-core`. É obrigatório usar `spring-boot-starter-flyway` + `flyway-database-postgresql`, senão as migrations não rodam (silenciosamente). Mesma lógica para módulos de teste: `spring-boot-starter-<tech>-test`.
 - Migrations são versionadas e nunca devem ser editadas após aplicadas — criar uma nova migration para correções
 - Ordem atual: V1 endereco · V2 area · V3 congregacao · V4 pessoa · V5 telefone · V6 corista · V7 role ·
-  V8/V9 ajustes de corista · V10 soft delete/trilha em role · V11 app_user/app_user_role · V12 reverte FKs
-  prematuras de V11 (pessoa.aprovado_por/corista.promovido_por) · V13 novos roles de aprovação + descrição do
-  PRESBITERO · V14 status REPROVADO em pessoa (próxima: event)
+  V8/V9 ajustes de corista · V10 soft delete/trilha em role · V11 app_user/app_user_role (renomeadas na V15) ·
+  V12 reverte FKs prematuras de V11 (pessoa.aprovado_por/corista.promovido_por) · V13 novos roles de aprovação +
+  descrição do PRESBITERO · V14 status REPROVADO em pessoa · V15 renomeia app_user → usuario e app_user_role →
+  usuario_role (próxima: event)
 
 ## Observabilidade
 

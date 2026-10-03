@@ -9,7 +9,7 @@ import jakarta.validation.constraints.Size;
  * (role) nunca vem do cliente aqui: quem orquestra a criação deriva o papel certo (ex.: pela lista de
  * classificação do corista), pra ninguém se auto-atribuir um papel de maior privilégio no próprio cadastro.
  */
-public record AppUserCredenciaisRequest(
+public record UsuarioCredenciaisRequest(
 
         @NotBlank @Email @Size(max = 150)
         String email,
