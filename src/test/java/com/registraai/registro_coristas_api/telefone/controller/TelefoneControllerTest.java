@@ -1,5 +1,8 @@
 package com.registraai.registro_coristas_api.telefone.controller;
 
+import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
+import com.registraai.registro_coristas_api.suporte.SegurancaTesteConfig;
+import org.springframework.context.annotation.Import;
 import com.registraai.registro_coristas_api.pessoa.exception.PessoaNaoEncontradaException;
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
 import com.registraai.registro_coristas_api.telefone.dto.TelefoneRequest;
@@ -33,6 +36,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(TelefoneController.class)
+@Import(SegurancaTesteConfig.class)
+@WithUsuarioTeste
 class TelefoneControllerTest {
 
     private static final UUID PESSOA_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");

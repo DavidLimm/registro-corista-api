@@ -1,5 +1,6 @@
 package com.registraai.registro_coristas_api.area;
 
+import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
 import com.registraai.registro_coristas_api.area.model.Area;
 import com.registraai.registro_coristas_api.area.repository.AreaRepository;
 import com.registraai.registro_coristas_api.congregacao.model.Congregacao;
@@ -30,6 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
+@WithUsuarioTeste
 class AreaIntegracaoTest {
 
     @Container

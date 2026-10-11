@@ -1,5 +1,8 @@
 package com.registraai.registro_coristas_api.pessoa.controller;
 
+import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
+import com.registraai.registro_coristas_api.suporte.SegurancaTesteConfig;
+import org.springframework.context.annotation.Import;
 import com.registraai.registro_coristas_api.area.model.Area;
 import com.registraai.registro_coristas_api.congregacao.exception.CongregacaoInativaException;
 import com.registraai.registro_coristas_api.congregacao.exception.CongregacaoNaoEncontradaException;
@@ -24,6 +27,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -50,6 +54,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(PessoaController.class)
+@Import(SegurancaTesteConfig.class)
+@WithUsuarioTeste
 class PessoaControllerTest {
 
     /** Relógio fixo: hoje = 2026-09-20, para a idade e a faixa etária das respostas serem determinísticas. */
@@ -356,11 +362,11 @@ class PessoaControllerTest {
     @Test
     void aprovar_retorna200ComStatusAprovado() throws Exception {
         UUID id = UUID.randomUUID();
-        UUID aprovador = UUID.randomUUID();
+        UUID aprovador = UUID.fromString(WithUsuarioTeste.ID_PADRAO);
         when(pessoaService.aprovar(id, aprovador))
                 .thenReturn(pessoaPersistida(id, LocalDate.of(2000, 5, 17), StatusPessoa.APROVADO, false));
 
-        mockMvc.perform(patch("/v1/api/pessoas/{id}/aprovar", id).param("aprovadoPor", aprovador.toString()))
+        mockMvc.perform(patch("/v1/api/pessoas/{id}/aprovar", id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("APROVADO"));
     }
@@ -368,17 +374,18 @@ class PessoaControllerTest {
     @Test
     void aprovar_foraDePendente_retorna409() throws Exception {
         UUID id = UUID.randomUUID();
-        UUID aprovador = UUID.randomUUID();
+        UUID aprovador = UUID.fromString(WithUsuarioTeste.ID_PADRAO);
         when(pessoaService.aprovar(id, aprovador))
                 .thenThrow(new TransicaoDeStatusInvalidaException(StatusPessoa.INATIVO, StatusPessoa.APROVADO));
 
-        mockMvc.perform(patch("/v1/api/pessoas/{id}/aprovar", id).param("aprovadoPor", aprovador.toString()))
+        mockMvc.perform(patch("/v1/api/pessoas/{id}/aprovar", id))
                 .andExpect(status().isConflict());
     }
 
     @Test
-    void aprovar_semParametroObrigatorio_retorna400() throws Exception {
-        mockMvc.perform(patch("/v1/api/pessoas/{id}/aprovar", UUID.randomUUID())).andExpect(status().isBadRequest());
+    @WithAnonymousUser
+    void aprovar_semAutenticacao_retorna401() throws Exception {
+        mockMvc.perform(patch("/v1/api/pessoas/{id}/aprovar", UUID.randomUUID())).andExpect(status().isUnauthorized());
 
         verifyNoInteractions(pessoaService);
     }
@@ -386,11 +393,11 @@ class PessoaControllerTest {
     @Test
     void reprovar_retorna200ComStatusReprovado() throws Exception {
         UUID id = UUID.randomUUID();
-        UUID reprovador = UUID.randomUUID();
+        UUID reprovador = UUID.fromString(WithUsuarioTeste.ID_PADRAO);
         when(pessoaService.reprovar(id, reprovador))
                 .thenReturn(pessoaPersistida(id, LocalDate.of(2000, 5, 17), StatusPessoa.REPROVADO, false));
 
-        mockMvc.perform(patch("/v1/api/pessoas/{id}/reprovar", id).param("reprovadoPor", reprovador.toString()))
+        mockMvc.perform(patch("/v1/api/pessoas/{id}/reprovar", id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("REPROVADO"));
     }
@@ -398,10 +405,10 @@ class PessoaControllerTest {
     @Test
     void reprovar_inexistente_retorna404() throws Exception {
         UUID id = UUID.randomUUID();
-        UUID reprovador = UUID.randomUUID();
+        UUID reprovador = UUID.fromString(WithUsuarioTeste.ID_PADRAO);
         when(pessoaService.reprovar(id, reprovador)).thenThrow(new PessoaNaoEncontradaException(id));
 
-        mockMvc.perform(patch("/v1/api/pessoas/{id}/reprovar", id).param("reprovadoPor", reprovador.toString()))
+        mockMvc.perform(patch("/v1/api/pessoas/{id}/reprovar", id))
                 .andExpect(status().isNotFound());
     }
 }

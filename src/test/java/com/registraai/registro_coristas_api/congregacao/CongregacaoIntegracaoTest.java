@@ -1,5 +1,6 @@
 package com.registraai.registro_coristas_api.congregacao;
 
+import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
+@WithUsuarioTeste
 class CongregacaoIntegracaoTest {
 
     @Container

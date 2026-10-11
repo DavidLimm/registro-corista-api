@@ -1,5 +1,8 @@
 package com.registraai.registro_coristas_api.area.controller;
 
+import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
+import com.registraai.registro_coristas_api.suporte.SegurancaTesteConfig;
+import org.springframework.context.annotation.Import;
 import com.registraai.registro_coristas_api.area.dto.AreaRequest;
 import com.registraai.registro_coristas_api.area.exception.AreaNaoEncontradaException;
 import com.registraai.registro_coristas_api.area.exception.AreaNumeroDuplicadoException;
@@ -33,6 +36,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(AreaController.class)
+@Import(SegurancaTesteConfig.class)
+@WithUsuarioTeste
 class AreaControllerTest {
 
     private static final String JSON_VALIDO = """

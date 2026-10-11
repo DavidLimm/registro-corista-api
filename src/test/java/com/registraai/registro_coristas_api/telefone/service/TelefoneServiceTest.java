@@ -2,6 +2,7 @@ package com.registraai.registro_coristas_api.telefone.service;
 
 import com.registraai.registro_coristas_api.pessoa.exception.PessoaNaoEncontradaException;
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
+import com.registraai.registro_coristas_api.pessoa.service.LimiteDeEdicaoDeContato;
 import com.registraai.registro_coristas_api.pessoa.service.PessoaService;
 import com.registraai.registro_coristas_api.telefone.dto.TelefoneRequest;
 import com.registraai.registro_coristas_api.telefone.exception.TelefoneDuplicadoException;
@@ -37,6 +38,9 @@ class TelefoneServiceTest {
     @Mock
     private PessoaService pessoaService;
 
+    @Mock
+    private LimiteDeEdicaoDeContato limiteDeEdicaoDeContato;
+
     private TelefoneService telefoneService;
 
     private final UUID pessoaId = UUID.randomUUID();
@@ -44,7 +48,7 @@ class TelefoneServiceTest {
 
     @BeforeEach
     void preparar() {
-        telefoneService = new TelefoneService(telefoneRepository, pessoaService);
+        telefoneService = new TelefoneService(telefoneRepository, pessoaService, limiteDeEdicaoDeContato);
         pessoa = Pessoa.builder().id(pessoaId).nome("Maria da Silva").build();
     }
 

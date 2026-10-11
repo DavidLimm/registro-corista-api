@@ -1,5 +1,8 @@
 package com.registraai.registro_coristas_api.usuario.service;
 
+import static org.mockito.Mockito.verifyNoInteractions;
+import com.registraai.registro_coristas_api.usuario.event.PessoaVirouLiderEvent;
+import com.registraai.registro_coristas_api.usuario.exception.PapelCoristaExclusivoException;
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
 import com.registraai.registro_coristas_api.pessoa.model.StatusPessoa;
 import com.registraai.registro_coristas_api.pessoa.service.PessoaService;
@@ -19,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
+import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -45,6 +49,9 @@ import static org.mockito.Mockito.when;
 class UsuarioServiceTest {
 
     @Mock
+    private ApplicationEventPublisher eventos;
+
+    @Mock
     private UsuarioRepository usuarioRepository;
 
     @Mock
@@ -60,7 +67,7 @@ class UsuarioServiceTest {
 
     @BeforeEach
     void criarService() {
-        usuarioService = new UsuarioService(usuarioRepository, pessoaService, roleRepository, passwordEncoder);
+        usuarioService = new UsuarioService(usuarioRepository, pessoaService, roleRepository, passwordEncoder, eventos);
     }
 
     private Pessoa pessoaAprovada() {
@@ -72,7 +79,7 @@ class UsuarioServiceTest {
     }
 
     private UsuarioRequest request(UUID pessoaId, String email, Set<UUID> roleIds) {
-        return new UsuarioRequest(pessoaId, email, "senhaForte123", roleIds);
+        return new UsuarioRequest(pessoaId, email, "SenhaForte@123", roleIds);
     }
 
     private void repositorioDevolveOQueRecebe() {
@@ -89,7 +96,7 @@ class UsuarioServiceTest {
         when(usuarioRepository.existsByPessoaId(pessoa.getId())).thenReturn(false);
         when(usuarioRepository.existsByEmail("maria@exemplo.com")).thenReturn(false);
         when(roleRepository.findAllById(Set.of(role.getId()))).thenReturn(List.of(role));
-        when(passwordEncoder.encode("senhaForte123")).thenReturn("hash-bcrypt");
+        when(passwordEncoder.encode("SenhaForte@123")).thenReturn("hash-bcrypt");
         repositorioDevolveOQueRecebe();
 
         Usuario usuario = usuarioService.criar(request(pessoa.getId(), "  Maria@Exemplo.com ", Set.of(role.getId())));
@@ -176,10 +183,10 @@ class UsuarioServiceTest {
         when(usuarioRepository.existsByPessoaId(pessoa.getId())).thenReturn(false);
         when(usuarioRepository.existsByEmail("ana@exemplo.com")).thenReturn(false);
         when(roleRepository.findByNome("CORISTA_ADOLESCENTES")).thenReturn(Optional.of(role));
-        when(passwordEncoder.encode("senhaForte123")).thenReturn("hash");
+        when(passwordEncoder.encode("SenhaForte@123")).thenReturn("hash");
         repositorioDevolveOQueRecebe();
 
-        Usuario usuario = usuarioService.criarComPapelUnico(pessoa, "ana@exemplo.com", "senhaForte123", "CORISTA_ADOLESCENTES");
+        Usuario usuario = usuarioService.criarComPapelUnico(pessoa, "ana@exemplo.com", "SenhaForte@123", "CORISTA_ADOLESCENTES");
 
         assertThat(usuario.getRoles()).containsExactly(role);
         assertThat(usuario.getEmail()).isEqualTo("ana@exemplo.com");
@@ -193,7 +200,7 @@ class UsuarioServiceTest {
         when(usuarioRepository.existsByEmail("ana@exemplo.com")).thenReturn(false);
         when(roleRepository.findByNome("CORISTA_JOVENS")).thenReturn(Optional.of(inativa));
 
-        assertThatThrownBy(() -> usuarioService.criarComPapelUnico(pessoa, "ana@exemplo.com", "senhaForte123", "CORISTA_JOVENS"))
+        assertThatThrownBy(() -> usuarioService.criarComPapelUnico(pessoa, "ana@exemplo.com", "SenhaForte@123", "CORISTA_JOVENS"))
                 .isInstanceOf(RoleInativaException.class);
         verify(usuarioRepository, never()).save(any());
     }
@@ -246,7 +253,7 @@ class UsuarioServiceTest {
         when(usuarioRepository.findById(id)).thenReturn(Optional.of(existente));
         when(usuarioRepository.existsByEmailAndIdNot("novo@a.com", id)).thenReturn(false);
         when(roleRepository.findAllById(Set.of(novaRole.getId()))).thenReturn(List.of(novaRole));
-        when(passwordEncoder.encode("senhaForte123")).thenReturn("novo-hash");
+        when(passwordEncoder.encode("SenhaForte@123")).thenReturn("novo-hash");
         repositorioDevolveOQueRecebe();
 
         Usuario atualizado = usuarioService.atualizar(id, request(pessoa.getId(), "novo@a.com", Set.of(novaRole.getId())));
@@ -324,5 +331,51 @@ class UsuarioServiceTest {
         Usuario reativado = usuarioService.reativar(id);
 
         assertThat(reativado.isAtivo()).isTrue();
+    }
+
+    @Test
+    void criar_papelDeCoristaJuntoComOutroPapel_lancaExcecao() {
+        Pessoa pessoa = pessoaAprovada();
+        Role corista = role("CORISTA_JOVENS", true);
+        Role lider = role("LIDER_JOVENS", true);
+        when(pessoaService.buscarPorId(pessoa.getId())).thenReturn(pessoa);
+        when(usuarioRepository.existsByPessoaId(pessoa.getId())).thenReturn(false);
+        when(usuarioRepository.existsByEmail("a@a.com")).thenReturn(false);
+        Set<UUID> ids = Set.of(corista.getId(), lider.getId());
+        when(roleRepository.findAllById(ids)).thenReturn(List.of(corista, lider));
+
+        assertThatThrownBy(() -> usuarioService.criar(request(pessoa.getId(), "a@a.com", ids)))
+                .isInstanceOf(PapelCoristaExclusivoException.class);
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void criar_comPapelDeLideranca_avisaQueAPessoaVirouLider() {
+        Pessoa pessoa = pessoaAprovada();
+        Role lider = role("LIDER_JOVENS", true);
+        when(pessoaService.buscarPorId(pessoa.getId())).thenReturn(pessoa);
+        when(usuarioRepository.existsByPessoaId(pessoa.getId())).thenReturn(false);
+        when(usuarioRepository.existsByEmail("a@a.com")).thenReturn(false);
+        when(roleRepository.findAllById(Set.of(lider.getId()))).thenReturn(List.of(lider));
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocacao -> invocacao.getArgument(0));
+
+        usuarioService.criar(request(pessoa.getId(), "a@a.com", Set.of(lider.getId())));
+
+        verify(eventos).publishEvent(new PessoaVirouLiderEvent(pessoa.getId()));
+    }
+
+    @Test
+    void criar_soComPapelDeCorista_naoAvisaNada() {
+        Pessoa pessoa = pessoaAprovada();
+        Role corista = role("CORISTA_JOVENS", true);
+        when(pessoaService.buscarPorId(pessoa.getId())).thenReturn(pessoa);
+        when(usuarioRepository.existsByPessoaId(pessoa.getId())).thenReturn(false);
+        when(usuarioRepository.existsByEmail("a@a.com")).thenReturn(false);
+        when(roleRepository.findAllById(Set.of(corista.getId()))).thenReturn(List.of(corista));
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocacao -> invocacao.getArgument(0));
+
+        usuarioService.criar(request(pessoa.getId(), "a@a.com", Set.of(corista.getId())));
+
+        verifyNoInteractions(eventos);
     }
 }

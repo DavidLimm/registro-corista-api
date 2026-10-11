@@ -1,5 +1,8 @@
 package com.registraai.registro_coristas_api.endereco.controller;
 
+import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
+import com.registraai.registro_coristas_api.suporte.SegurancaTesteConfig;
+import org.springframework.context.annotation.Import;
 import com.registraai.registro_coristas_api.endereco.dto.EnderecoRequest;
 import com.registraai.registro_coristas_api.endereco.exception.EnderecoNaoEncontradoException;
 import com.registraai.registro_coristas_api.endereco.model.Endereco;
@@ -26,6 +29,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(EnderecoController.class)
+@Import(SegurancaTesteConfig.class)
+@WithUsuarioTeste
 class EnderecoControllerTest {
 
     private static final String JSON_VALIDO = """

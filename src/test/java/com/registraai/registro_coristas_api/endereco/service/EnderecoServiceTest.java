@@ -6,6 +6,8 @@ import com.registraai.registro_coristas_api.endereco.model.Endereco;
 import com.registraai.registro_coristas_api.endereco.repository.EnderecoRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import com.registraai.registro_coristas_api.pessoa.repository.PessoaRepository;
+import com.registraai.registro_coristas_api.pessoa.service.LimiteDeEdicaoDeContato;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -25,6 +27,12 @@ class EnderecoServiceTest {
 
     @Mock
     private EnderecoRepository enderecoRepository;
+
+    @Mock
+    private PessoaRepository pessoaRepository;
+
+    @Mock
+    private LimiteDeEdicaoDeContato limiteDeEdicaoDeContato;
 
     @InjectMocks
     private EnderecoService enderecoService;

@@ -1,5 +1,6 @@
 package com.registraai.registro_coristas_api.corista;
 
+import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
+@WithUsuarioTeste
 class CoristaIntegracaoTest {
 
     @Container
@@ -408,7 +410,7 @@ class CoristaIntegracaoTest {
     void criar_comUsuario_criaLoginJuntoESoUmUsuarioPorPessoa() throws Exception {
         String congregacaoId = criarCongregacao(criarArea(17), "Sede");
         String camposComUsuario = CAMPOS_PADRAO_DE_CORISTA
-                + ", \"usuario\": { \"email\": \"ana@exemplo.com\", \"senha\": \"senhaForte123\" }";
+                + ", \"usuario\": { \"email\": \"ana@exemplo.com\", \"senha\": \"SenhaForte@123\" }";
 
         String resposta = postCorista(corpo(congregacaoId, "Ana", haAnos(30, 0), "", camposComUsuario))
                 .andExpect(status().isCreated())
@@ -419,7 +421,7 @@ class CoristaIntegracaoTest {
         // já existe usuário para essa pessoa: uma nova tentativa de criar login pra ela esbarra na unicidade
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON)
                         .content(("{ \"pessoaId\": \"%s\", \"email\": \"outro@exemplo.com\","
-                                + " \"senha\": \"outraSenha123\", \"roleIds\": [\"%s\"] }")
+                                + " \"senha\": \"OutraSenha@456\", \"roleIds\": [\"%s\"] }")
                                 .formatted(pessoaId, UUID.randomUUID())))
                 .andExpect(status().isConflict());
     }
@@ -431,7 +433,7 @@ class CoristaIntegracaoTest {
         String sede = criarCongregacao(criarArea(18), "Sede");
         String id = cadastrar(sede, "Bia", haAnos(30, 0));
 
-        mockMvc.perform(patch("/v1/api/coristas/" + id + "/aprovar").param("aprovadoPor", UUID.randomUUID().toString()))
+        mockMvc.perform(patch("/v1/api/coristas/" + id + "/aprovar"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.pessoa.status").value("APROVADO"));
     }
@@ -441,7 +443,7 @@ class CoristaIntegracaoTest {
         String sede = criarCongregacao(criarArea(19), "Sede");
         String id = cadastrar(sede, "Caio", haAnos(15, 6));
 
-        mockMvc.perform(patch("/v1/api/coristas/" + id + "/reprovar").param("reprovadoPor", UUID.randomUUID().toString()))
+        mockMvc.perform(patch("/v1/api/coristas/" + id + "/reprovar"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.pessoa.status").value("REPROVADO"))
                 .andExpect(jsonPath("$.listaClassificacao").value("ADOLESCENTE"));
