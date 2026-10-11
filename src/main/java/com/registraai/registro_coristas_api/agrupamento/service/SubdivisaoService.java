@@ -6,6 +6,7 @@ import com.registraai.registro_coristas_api.agrupamento.exception.AgrupamentoIna
 import com.registraai.registro_coristas_api.agrupamento.exception.AgrupamentoInvalidoException;
 import com.registraai.registro_coristas_api.agrupamento.exception.AgrupamentoNaoEncontradoException;
 import com.registraai.registro_coristas_api.agrupamento.exception.AgrupamentoPossuiCongregacoesException;
+import com.registraai.registro_coristas_api.agrupamento.exception.SubdivisaoInativaException;
 import com.registraai.registro_coristas_api.agrupamento.exception.SubdivisaoNaoEncontradaException;
 import com.registraai.registro_coristas_api.agrupamento.model.Agrupamento;
 import com.registraai.registro_coristas_api.agrupamento.model.Subdivisao;
@@ -52,6 +53,17 @@ public class SubdivisaoService {
                 .orElseThrow(() -> new SubdivisaoNaoEncontradaException(id));
     }
 
+    /** Para vincular uma congregação: a subdivisão e o agrupamento dela precisam estar ativos. */
+    @Transactional(readOnly = true)
+    public Subdivisao buscarAtivaParaVinculo(UUID id) {
+        Subdivisao subdivisao = subdivisaoRepository.findById(id)
+                .orElseThrow(() -> new SubdivisaoNaoEncontradaException(id));
+        if (!subdivisao.isAtivo() || !subdivisao.getAgrupamento().isAtivo()) {
+            throw new SubdivisaoInativaException();
+        }
+        return subdivisao;
+    }
+
     /** @param ativo {@code null} lista ativas e inativas. */
     @Transactional(readOnly = true)
     public List<Subdivisao> listar(UUID agrupamentoId, Boolean ativo) {
@@ -76,7 +88,7 @@ public class SubdivisaoService {
     public void inativar(UUID agrupamentoId, UUID id) {
         Subdivisao subdivisao = buscar(agrupamentoId, id);
         recusarSeImplicita(subdivisao.getAgrupamento());
-        long congregacoesAtivas = congregacaoRepository.contarAtivasPorSubdivisao(id);
+        long congregacoesAtivas = congregacaoRepository.countBySubdivisaoIdAndAtivaTrue(id);
         if (congregacoesAtivas > 0) {
             throw new AgrupamentoPossuiCongregacoesException(descrever(subdivisao), congregacoesAtivas);
         }

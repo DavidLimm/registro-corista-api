@@ -6,8 +6,8 @@ import org.springframework.web.ErrorResponseException;
 /** Renderizada como Problem Details (RFC 7807) com status 409. */
 public class CongregacaoNomeDuplicadoException extends ErrorResponseException {
 
-    public CongregacaoNomeDuplicadoException(String nome, Integer numeroArea) {
+    public CongregacaoNomeDuplicadoException(String nome) {
         super(HttpStatus.CONFLICT);
-        setDetail("Já existe uma congregação chamada \"" + nome + "\" na área " + numeroArea);
+        setDetail("Já existe uma congregação chamada \"" + nome + "\" nesta subdivisão");
     }
 }

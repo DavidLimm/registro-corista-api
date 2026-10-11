@@ -3,9 +3,10 @@ package com.registraai.registro_coristas_api.congregacao.controller;
 import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
 import com.registraai.registro_coristas_api.suporte.SegurancaTesteConfig;
 import org.springframework.context.annotation.Import;
-import com.registraai.registro_coristas_api.area.exception.AreaInativaException;
-import com.registraai.registro_coristas_api.area.exception.AreaNaoEncontradaException;
-import com.registraai.registro_coristas_api.area.model.Area;
+import com.registraai.registro_coristas_api.agrupamento.exception.SubdivisaoInativaException;
+import com.registraai.registro_coristas_api.agrupamento.exception.SubdivisaoNaoEncontradaException;
+import com.registraai.registro_coristas_api.agrupamento.model.Subdivisao;
+import com.registraai.registro_coristas_api.suporte.HierarquiaTeste;
 import com.registraai.registro_coristas_api.congregacao.dto.CongregacaoRequest;
 import com.registraai.registro_coristas_api.congregacao.exception.CongregacaoNaoEncontradaException;
 import com.registraai.registro_coristas_api.congregacao.exception.CongregacaoNomeDuplicadoException;
@@ -43,11 +44,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WithUsuarioTeste
 class CongregacaoControllerTest {
 
-    private static final UUID AREA_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID SUBDIVISAO_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID AGRUPAMENTO_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
     private static final String JSON_VALIDO = """
             {
-              "areaId": "11111111-1111-1111-1111-111111111111",
+              "subdivisaoId": "11111111-1111-1111-1111-111111111111",
               "nome": "Sede",
               "endereco": {
                 "logradouro": "Rua da Aurora", "numero": "123", "bairro": "Boa Vista",
@@ -64,19 +66,19 @@ class CongregacaoControllerTest {
 
     private Congregacao congregacaoPersistida(UUID id, boolean ativa, boolean comEndereco) {
         Instant agora = Instant.parse("2026-09-20T12:00:00Z");
-        Area area = Area.builder().id(AREA_ID).numero(40).nome("Área 40").criadoEm(agora).atualizadoEm(agora).build();
+        Subdivisao subdivisao = HierarquiaTeste.subdivisaoDaArea40(AGRUPAMENTO_ID, SUBDIVISAO_ID);
         Endereco endereco = comEndereco
                 ? Endereco.builder().id(UUID.randomUUID()).logradouro("Rua da Aurora").numero("123")
                         .bairro("Boa Vista").cidade("Recife").uf("PE").cep("50050000")
                         .criadoEm(agora).atualizadoEm(agora).build()
                 : null;
         return Congregacao.builder()
-                .id(id).area(area).endereco(endereco).nome("Sede").ativa(ativa)
+                .id(id).subdivisao(subdivisao).endereco(endereco).nome("Sede").ativa(ativa)
                 .criadoEm(agora).atualizadoEm(agora).build();
     }
 
     @Test
-    void criar_retorna201ComLocationEAreaEEnderecoAninhados() throws Exception {
+    void criar_retorna201ComLocationESubdivisaoAgrupamentoEEnderecoAninhados() throws Exception {
         UUID id = UUID.randomUUID();
         when(congregacaoService.criar(any(CongregacaoRequest.class))).thenReturn(congregacaoPersistida(id, true, true));
 
@@ -86,8 +88,8 @@ class CongregacaoControllerTest {
                 .andExpect(jsonPath("$.id").value(id.toString()))
                 .andExpect(jsonPath("$.nome").value("Sede"))
                 .andExpect(jsonPath("$.ativa").value(true))
-                .andExpect(jsonPath("$.area.id").value(AREA_ID.toString()))
-                .andExpect(jsonPath("$.area.numero").value(40))
+                .andExpect(jsonPath("$.subdivisao.id").value(SUBDIVISAO_ID.toString()))
+                .andExpect(jsonPath("$.agrupamento.numero").value(40))
                 .andExpect(jsonPath("$.endereco.cep").value("50050000"));
     }
 
@@ -97,14 +99,14 @@ class CongregacaoControllerTest {
         when(congregacaoService.criar(any(CongregacaoRequest.class))).thenReturn(congregacaoPersistida(id, true, false));
 
         mockMvc.perform(post("/v1/api/congregacoes").contentType(MediaType.APPLICATION_JSON).content("""
-                        { "areaId": "11111111-1111-1111-1111-111111111111", "nome": "Sede" }
+                        { "subdivisaoId": "11111111-1111-1111-1111-111111111111", "nome": "Sede" }
                         """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.endereco").doesNotExist());
     }
 
     @Test
-    void criar_semAreaOuNomeEmBranco_retorna400ENaoChamaService() throws Exception {
+    void criar_semSubdivisaoOuNomeEmBranco_retorna400ENaoChamaService() throws Exception {
         mockMvc.perform(post("/v1/api/congregacoes").contentType(MediaType.APPLICATION_JSON).content("""
                         { "nome": "   " }
                         """))
@@ -118,7 +120,7 @@ class CongregacaoControllerTest {
     void criar_comEnderecoInvalido_retorna400PorValidacaoAninhada() throws Exception {
         mockMvc.perform(post("/v1/api/congregacoes").contentType(MediaType.APPLICATION_JSON).content("""
                         {
-                          "areaId": "11111111-1111-1111-1111-111111111111",
+                          "subdivisaoId": "11111111-1111-1111-1111-111111111111",
                           "nome": "Sede",
                           "endereco": { "logradouro": "", "bairro": "Boa Vista", "cidade": "Recife", "uf": "PER" }
                         }
@@ -129,48 +131,48 @@ class CongregacaoControllerTest {
     }
 
     @Test
-    void criar_areaInexistente_retorna404() throws Exception {
-        when(congregacaoService.criar(any(CongregacaoRequest.class))).thenThrow(new AreaNaoEncontradaException(AREA_ID));
+    void criar_subdivisaoInexistente_retorna404() throws Exception {
+        when(congregacaoService.criar(any(CongregacaoRequest.class))).thenThrow(new SubdivisaoNaoEncontradaException(SUBDIVISAO_ID));
 
         mockMvc.perform(post("/v1/api/congregacoes").contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isNotFound());
     }
 
     @Test
-    void criar_areaInativa_retorna409() throws Exception {
-        when(congregacaoService.criar(any(CongregacaoRequest.class))).thenThrow(new AreaInativaException(40));
+    void criar_subdivisaoInativa_retorna409() throws Exception {
+        when(congregacaoService.criar(any(CongregacaoRequest.class))).thenThrow(new SubdivisaoInativaException());
 
         mockMvc.perform(post("/v1/api/congregacoes").contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.detail").value("A área 40 está inativa. Reative-a ou escolha outra área ativa."));
+                .andExpect(jsonPath("$.detail").value("A subdivisão (ou o agrupamento a que pertence) está inativa. Reative-a ou escolha outra."));
     }
 
     @Test
-    void criar_nomeDuplicadoNaArea_retorna409() throws Exception {
+    void criar_nomeDuplicadoNaSubdivisao_retorna409() throws Exception {
         when(congregacaoService.criar(any(CongregacaoRequest.class)))
-                .thenThrow(new CongregacaoNomeDuplicadoException("Sede", 40));
+                .thenThrow(new CongregacaoNomeDuplicadoException("Sede"));
 
         mockMvc.perform(post("/v1/api/congregacoes").contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.detail").value("Já existe uma congregação chamada \"Sede\" na área 40"));
+                .andExpect(jsonPath("$.detail").value("Já existe uma congregação chamada \"Sede\" nesta subdivisão"));
     }
 
     @Test
     void listar_repassaFiltrosAoService() throws Exception {
-        when(congregacaoService.listar(AREA_ID, true))
+        when(congregacaoService.listar(null, SUBDIVISAO_ID, true))
                 .thenReturn(List.of(congregacaoPersistida(UUID.randomUUID(), true, false)));
 
-        mockMvc.perform(get("/v1/api/congregacoes").param("areaId", AREA_ID.toString()).param("ativa", "true"))
+        mockMvc.perform(get("/v1/api/congregacoes").param("subdivisaoId", SUBDIVISAO_ID.toString()).param("ativa", "true"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].nome").value("Sede"));
 
-        verify(congregacaoService).listar(AREA_ID, true);
+        verify(congregacaoService).listar(null, SUBDIVISAO_ID, true);
     }
 
     @Test
     void listar_semFiltros_passaNulos() throws Exception {
-        when(congregacaoService.listar(null, null)).thenReturn(List.of());
+        when(congregacaoService.listar(null, null, null)).thenReturn(List.of());
 
         mockMvc.perform(get("/v1/api/congregacoes"))
                 .andExpect(status().isOk())
@@ -178,8 +180,8 @@ class CongregacaoControllerTest {
     }
 
     @Test
-    void listar_comAreaIdMalFormado_retorna400() throws Exception {
-        mockMvc.perform(get("/v1/api/congregacoes").param("areaId", "nao-e-uuid"))
+    void listar_comSubdivisaoIdMalFormado_retorna400() throws Exception {
+        mockMvc.perform(get("/v1/api/congregacoes").param("subdivisaoId", "nao-e-uuid"))
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(congregacaoService);
@@ -228,7 +230,7 @@ class CongregacaoControllerTest {
     void atualizar_destinoInativoOuNomeDuplicado_retorna409() throws Exception {
         UUID id = UUID.randomUUID();
         when(congregacaoService.atualizar(eq(id), any(CongregacaoRequest.class)))
-                .thenThrow(new AreaInativaException(41));
+                .thenThrow(new SubdivisaoInativaException());
 
         mockMvc.perform(put("/v1/api/congregacoes/{id}", id).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isConflict());
@@ -274,9 +276,9 @@ class CongregacaoControllerTest {
     }
 
     @Test
-    void reativar_comAreaInativa_retorna409() throws Exception {
+    void reativar_comSubdivisaoInativa_retorna409() throws Exception {
         UUID id = UUID.randomUUID();
-        when(congregacaoService.reativar(id)).thenThrow(new AreaInativaException(40));
+        when(congregacaoService.reativar(id)).thenThrow(new SubdivisaoInativaException());
 
         mockMvc.perform(patch("/v1/api/congregacoes/{id}/reativar", id))
                 .andExpect(status().isConflict());

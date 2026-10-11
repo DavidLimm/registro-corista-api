@@ -1,6 +1,7 @@
 package com.registraai.registro_coristas_api.afastamento;
 
 import com.registraai.registro_coristas_api.suporte.UsuarioTesteFactory;
+import com.registraai.registro_coristas_api.suporte.HierarquiaTeste;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -62,13 +63,11 @@ class SolicitacaoAfastamentoIntegracaoTest {
     }
 
     private String criarCongregacao(int numeroDaArea) throws Exception {
-        String areaLocation = mockMvc.perform(post("/v1/api/areas").with(admin()).contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"numero\": %d, \"nome\": \"Área %d\" }".formatted(numeroDaArea, numeroDaArea)))
-                .andExpect(status().isCreated()).andReturn().getResponse().getHeader("Location");
+        String subdivisaoId = HierarquiaTeste.criarSubdivisao(mockMvc, admin());
         String congregacaoLocation = mockMvc.perform(post("/v1/api/congregacoes").with(admin())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"areaId\": \"%s\", \"nome\": \"Sede %d\" }"
-                                .formatted(idDoLocation(areaLocation), numeroDaArea)))
+                        .content("{ \"subdivisaoId\": \"%s\", \"nome\": \"Sede %d\" }"
+                                .formatted(subdivisaoId, numeroDaArea)))
                 .andExpect(status().isCreated()).andReturn().getResponse().getHeader("Location");
         return idDoLocation(congregacaoLocation);
     }

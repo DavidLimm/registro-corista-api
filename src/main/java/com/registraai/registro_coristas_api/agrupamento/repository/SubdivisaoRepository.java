@@ -10,6 +10,10 @@ import java.util.UUID;
 
 public interface SubdivisaoRepository extends JpaRepository<Subdivisao, UUID> {
 
+    @Override
+    @EntityGraph(attributePaths = "agrupamento")
+    Optional<Subdivisao> findById(UUID id);
+
     // agrupamento é LAZY e o open-in-view está desligado: carrega junto para o Controller montar o Response
     @EntityGraph(attributePaths = "agrupamento")
     Optional<Subdivisao> findByIdAndAgrupamentoId(UUID id, UUID agrupamentoId);

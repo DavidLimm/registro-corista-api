@@ -1,7 +1,9 @@
 package com.registraai.registro_coristas_api.telefone.repository;
 
-import com.registraai.registro_coristas_api.area.model.Area;
-import com.registraai.registro_coristas_api.area.repository.AreaRepository;
+import com.registraai.registro_coristas_api.agrupamento.model.Subdivisao;
+import com.registraai.registro_coristas_api.agrupamento.repository.AgrupamentoRepository;
+import com.registraai.registro_coristas_api.agrupamento.repository.SubdivisaoRepository;
+import com.registraai.registro_coristas_api.suporte.HierarquiaTeste;
 import com.registraai.registro_coristas_api.congregacao.model.Congregacao;
 import com.registraai.registro_coristas_api.congregacao.repository.CongregacaoRepository;
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
@@ -48,15 +50,18 @@ class TelefoneRepositoryTest {
     private CongregacaoRepository congregacaoRepository;
 
     @Autowired
-    private AreaRepository areaRepository;
+    private AgrupamentoRepository agrupamentoRepository;
+
+    @Autowired
+    private SubdivisaoRepository subdivisaoRepository;
 
     private Congregacao congregacao;
     private Pessoa pessoa;
 
     @BeforeEach
     void criarPessoa() {
-        Area area = areaRepository.saveAndFlush(Area.builder().numero(40).nome("Área 40").build());
-        congregacao = congregacaoRepository.saveAndFlush(Congregacao.builder().area(area).nome("Sede").build());
+        Subdivisao subdivisao = HierarquiaTeste.salvarSubdivisao(agrupamentoRepository, subdivisaoRepository);
+        congregacao = congregacaoRepository.saveAndFlush(Congregacao.builder().subdivisao(subdivisao).nome("Sede").build());
         pessoa = novaPessoa("Maria da Silva");
     }
 

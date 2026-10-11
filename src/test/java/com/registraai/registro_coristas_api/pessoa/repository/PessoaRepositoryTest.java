@@ -1,7 +1,9 @@
 package com.registraai.registro_coristas_api.pessoa.repository;
 
-import com.registraai.registro_coristas_api.area.model.Area;
-import com.registraai.registro_coristas_api.area.repository.AreaRepository;
+import com.registraai.registro_coristas_api.agrupamento.model.Subdivisao;
+import com.registraai.registro_coristas_api.agrupamento.repository.AgrupamentoRepository;
+import com.registraai.registro_coristas_api.agrupamento.repository.SubdivisaoRepository;
+import com.registraai.registro_coristas_api.suporte.HierarquiaTeste;
 import com.registraai.registro_coristas_api.congregacao.model.Congregacao;
 import com.registraai.registro_coristas_api.congregacao.repository.CongregacaoRepository;
 import com.registraai.registro_coristas_api.endereco.model.Endereco;
@@ -50,7 +52,10 @@ class PessoaRepositoryTest {
     private CongregacaoRepository congregacaoRepository;
 
     @Autowired
-    private AreaRepository areaRepository;
+    private AgrupamentoRepository agrupamentoRepository;
+
+    @Autowired
+    private SubdivisaoRepository subdivisaoRepository;
 
     @Autowired
     private EnderecoRepository enderecoRepository;
@@ -62,8 +67,8 @@ class PessoaRepositoryTest {
 
     @BeforeEach
     void criarCongregacao() {
-        Area area = areaRepository.saveAndFlush(Area.builder().numero(40).nome("Área 40").build());
-        congregacao = congregacaoRepository.saveAndFlush(Congregacao.builder().area(area).nome("Sede").build());
+        Subdivisao subdivisao = HierarquiaTeste.salvarSubdivisao(agrupamentoRepository, subdivisaoRepository);
+        congregacao = congregacaoRepository.saveAndFlush(Congregacao.builder().subdivisao(subdivisao).nome("Sede").build());
     }
 
     private Pessoa.PessoaBuilder pessoaValida() {
@@ -134,7 +139,7 @@ class PessoaRepositoryTest {
 
     /** Com o open-in-view desligado, o Controller monta o Response fora da transação: tudo precisa vir carregado. */
     @Test
-    void findById_eFindAllComEspecificacao_carregamCongregacaoAreaEEnderecoJuntos() {
+    void findById_eFindAllComEspecificacao_carregamCongregacaoSubdivisaoAgrupamentoEEnderecoJuntos() {
         Endereco endereco = enderecoRepository.saveAndFlush(Endereco.builder()
                 .logradouro("Rua da Aurora").bairro("Boa Vista").cidade("Recife").uf("PE").build());
         Pessoa salva = pessoaRepository.saveAndFlush(pessoaValida().endereco(endereco).build());
@@ -142,7 +147,7 @@ class PessoaRepositoryTest {
 
         Pessoa porId = pessoaRepository.findById(salva.getId()).orElseThrow();
         assertThat(Hibernate.isInitialized(porId.getCongregacao())).isTrue();
-        assertThat(Hibernate.isInitialized(porId.getCongregacao().getArea())).isTrue();
+        assertThat(Hibernate.isInitialized(porId.getCongregacao().getSubdivisao().getAgrupamento())).isTrue();
         assertThat(Hibernate.isInitialized(porId.getEndereco())).isTrue();
 
         entityManager.clear();
@@ -150,7 +155,7 @@ class PessoaRepositoryTest {
         Pessoa daPagina = pessoaRepository.findAll(Specification.<Pessoa>unrestricted(), PageRequest.of(0, 10))
                 .getContent().getFirst();
         assertThat(Hibernate.isInitialized(daPagina.getCongregacao())).isTrue();
-        assertThat(Hibernate.isInitialized(daPagina.getCongregacao().getArea())).isTrue();
+        assertThat(Hibernate.isInitialized(daPagina.getCongregacao().getSubdivisao().getAgrupamento())).isTrue();
         assertThat(Hibernate.isInitialized(daPagina.getEndereco())).isTrue();
     }
 

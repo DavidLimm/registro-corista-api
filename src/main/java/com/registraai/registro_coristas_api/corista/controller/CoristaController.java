@@ -50,7 +50,7 @@ public class CoristaController {
         return ResponseEntity.created(location).body(CoristaResponse.de(corista, hoje()));
     }
 
-    /** Paginada e ordenada por nome. Filtros opcionais: nome (trecho), areaId, congregacaoId, listaClassificacao, status. */
+    /** Paginada e ordenada por nome. Filtros opcionais: nome (trecho), agrupamentoId, subdivisaoId, congregacaoId, listaClassificacao, status. */
     @PreAuthorize("hasAuthority('CORISTA_LER')")
     @GetMapping
     public PagedModel<CoristaResponse> listar(CoristaFiltro filtro,

@@ -166,7 +166,7 @@ class SubdivisaoServiceTest {
         Agrupamento filial = Agrupamento.builder().id(agrupamentoId).tipo(FILIAL).nome("Petrolina").build();
         Subdivisao area = Subdivisao.builder().id(id).agrupamento(filial).numero(1).build();
         when(subdivisaoRepository.findByIdAndAgrupamentoId(id, agrupamentoId)).thenReturn(Optional.of(area));
-        when(congregacaoRepository.contarAtivasPorSubdivisao(id)).thenReturn(1L);
+        when(congregacaoRepository.countBySubdivisaoIdAndAtivaTrue(id)).thenReturn(1L);
 
         assertThatThrownBy(() -> subdivisaoService.inativar(agrupamentoId, id))
                 .isInstanceOf(AgrupamentoPossuiCongregacoesException.class);
@@ -179,7 +179,7 @@ class SubdivisaoServiceTest {
         Agrupamento campo = Agrupamento.builder().id(agrupamentoId).tipo(CAMPO_MISSIONARIO).nome("Argentina").pais("Argentina").build();
         Subdivisao local = Subdivisao.builder().id(id).agrupamento(campo).nome("Alejandro Korn").build();
         when(subdivisaoRepository.findByIdAndAgrupamentoId(id, agrupamentoId)).thenReturn(Optional.of(local));
-        when(congregacaoRepository.contarAtivasPorSubdivisao(id)).thenReturn(0L);
+        when(congregacaoRepository.countBySubdivisaoIdAndAtivaTrue(id)).thenReturn(0L);
 
         subdivisaoService.inativar(agrupamentoId, id);
 

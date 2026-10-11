@@ -150,9 +150,13 @@ public class CoristaService {
             especificacao = especificacao.and((root, query, cb) ->
                     cb.like(cb.lower(root.get("pessoa").get("nome")), trecho, '\\'));
         }
-        if (filtro.areaId() != null) {
+        if (filtro.agrupamentoId() != null) {
             especificacao = especificacao.and((root, query, cb) ->
-                    cb.equal(root.get("pessoa").get("congregacao").get("area").get("id"), filtro.areaId()));
+                    cb.equal(root.get("pessoa").get("congregacao").get("subdivisao").get("agrupamento").get("id"), filtro.agrupamentoId()));
+        }
+        if (filtro.subdivisaoId() != null) {
+            especificacao = especificacao.and((root, query, cb) ->
+                    cb.equal(root.get("pessoa").get("congregacao").get("subdivisao").get("id"), filtro.subdivisaoId()));
         }
         if (filtro.congregacaoId() != null) {
             especificacao = especificacao.and((root, query, cb) ->

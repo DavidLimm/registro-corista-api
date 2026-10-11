@@ -11,7 +11,8 @@ import java.util.UUID;
  */
 public record PessoaFiltro(
         String nome,
-        UUID areaId,
+        UUID agrupamentoId,
+        UUID subdivisaoId,
         UUID congregacaoId,
         FaixaEtaria faixaEtaria,
         StatusPessoa status

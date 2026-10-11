@@ -1,9 +1,10 @@
 package com.registraai.registro_coristas_api.congregacao.service;
 
-import com.registraai.registro_coristas_api.area.exception.AreaInativaException;
-import com.registraai.registro_coristas_api.area.exception.AreaNaoEncontradaException;
-import com.registraai.registro_coristas_api.area.model.Area;
-import com.registraai.registro_coristas_api.area.service.AreaService;
+import com.registraai.registro_coristas_api.agrupamento.exception.SubdivisaoInativaException;
+import com.registraai.registro_coristas_api.agrupamento.exception.SubdivisaoNaoEncontradaException;
+import com.registraai.registro_coristas_api.agrupamento.model.Subdivisao;
+import com.registraai.registro_coristas_api.suporte.HierarquiaTeste;
+import com.registraai.registro_coristas_api.agrupamento.service.SubdivisaoService;
 import com.registraai.registro_coristas_api.congregacao.dto.CongregacaoRequest;
 import com.registraai.registro_coristas_api.congregacao.exception.CongregacaoNaoEncontradaException;
 import com.registraai.registro_coristas_api.congregacao.exception.CongregacaoNomeDuplicadoException;
@@ -41,7 +42,7 @@ class CongregacaoServiceTest {
     private CongregacaoRepository congregacaoRepository;
 
     @Mock
-    private AreaService areaService;
+    private SubdivisaoService subdivisaoService;
 
     @Mock
     private EnderecoService enderecoService;
@@ -49,13 +50,13 @@ class CongregacaoServiceTest {
     @InjectMocks
     private CongregacaoService congregacaoService;
 
-    private final UUID areaId = UUID.randomUUID();
-    private final Area area = Area.builder().id(areaId).numero(40).nome("Área 40").build();
+    private final UUID subdivisaoId = UUID.randomUUID();
+    private final Subdivisao subdivisao = HierarquiaTeste.subdivisaoDaArea40(UUID.randomUUID(), subdivisaoId);
     private final EnderecoRequest enderecoRequest =
             new EnderecoRequest("Rua da Aurora", "123", null, "Boa Vista", "Recife", "PE", "50050000");
 
-    private Congregacao congregacaoExistente(UUID id, Area daArea, Endereco endereco) {
-        return Congregacao.builder().id(id).area(daArea).endereco(endereco).nome("Sede").build();
+    private Congregacao congregacaoExistente(UUID id, Subdivisao daSubdivisao, Endereco endereco) {
+        return Congregacao.builder().id(id).subdivisao(daSubdivisao).endereco(endereco).nome("Sede").build();
     }
 
     // ---------- criar ----------
@@ -63,14 +64,14 @@ class CongregacaoServiceTest {
     @Test
     void criar_gravaCongregacaoAtivaComNomeSemEspacosEEndereco() {
         Endereco endereco = Endereco.builder().id(UUID.randomUUID()).logradouro("Rua da Aurora").build();
-        when(areaService.buscarPorId(areaId)).thenReturn(area);
-        when(congregacaoRepository.existsByAreaIdAndNomeIgnoreCase(areaId, "Sede")).thenReturn(false);
+        when(subdivisaoService.buscarAtivaParaVinculo(subdivisaoId)).thenReturn(subdivisao);
+        when(congregacaoRepository.existsBySubdivisaoIdAndNomeIgnoreCase(subdivisaoId, "Sede")).thenReturn(false);
         when(enderecoService.criar(enderecoRequest)).thenReturn(endereco);
         when(congregacaoRepository.save(any(Congregacao.class))).thenAnswer(invocacao -> invocacao.getArgument(0));
 
-        Congregacao congregacao = congregacaoService.criar(new CongregacaoRequest(areaId, "  Sede  ", enderecoRequest));
+        Congregacao congregacao = congregacaoService.criar(new CongregacaoRequest(subdivisaoId, "  Sede  ", enderecoRequest));
 
-        assertThat(congregacao.getArea()).isSameAs(area);
+        assertThat(congregacao.getSubdivisao()).isSameAs(subdivisao);
         assertThat(congregacao.getNome()).isEqualTo("Sede");
         assertThat(congregacao.isAtiva()).isTrue();
         assertThat(congregacao.getEndereco()).isSameAs(endereco);
@@ -78,42 +79,43 @@ class CongregacaoServiceTest {
 
     @Test
     void criar_semEnderecoNaoChamaEnderecoService() {
-        when(areaService.buscarPorId(areaId)).thenReturn(area);
-        when(congregacaoRepository.existsByAreaIdAndNomeIgnoreCase(areaId, "Sede")).thenReturn(false);
+        when(subdivisaoService.buscarAtivaParaVinculo(subdivisaoId)).thenReturn(subdivisao);
+        when(congregacaoRepository.existsBySubdivisaoIdAndNomeIgnoreCase(subdivisaoId, "Sede")).thenReturn(false);
         when(congregacaoRepository.save(any(Congregacao.class))).thenAnswer(invocacao -> invocacao.getArgument(0));
 
-        Congregacao congregacao = congregacaoService.criar(new CongregacaoRequest(areaId, "Sede", null));
+        Congregacao congregacao = congregacaoService.criar(new CongregacaoRequest(subdivisaoId, "Sede", null));
 
         assertThat(congregacao.getEndereco()).isNull();
         verifyNoInteractions(enderecoService);
     }
 
     @Test
-    void criar_lancaExcecaoENaoGravaQuandoAreaEstaInativa() {
-        Area inativa = Area.builder().id(areaId).numero(40).nome("Área 40").ativa(false).build();
-        when(areaService.buscarPorId(areaId)).thenReturn(inativa);
+    void criar_lancaExcecaoENaoGravaQuandoSubdivisaoEstaInativa() {
+        Subdivisao inativa = HierarquiaTeste.subdivisaoDaArea40(UUID.randomUUID(), subdivisaoId);
+        inativa.setAtivo(false);
+        when(subdivisaoService.buscarAtivaParaVinculo(subdivisaoId)).thenThrow(new SubdivisaoInativaException());
 
-        assertThatThrownBy(() -> congregacaoService.criar(new CongregacaoRequest(areaId, "Sede", enderecoRequest)))
-                .isInstanceOf(AreaInativaException.class);
+        assertThatThrownBy(() -> congregacaoService.criar(new CongregacaoRequest(subdivisaoId, "Sede", enderecoRequest)))
+                .isInstanceOf(SubdivisaoInativaException.class);
         verify(congregacaoRepository, never()).save(any());
         verifyNoInteractions(enderecoService);
     }
 
     @Test
-    void criar_propagaExcecaoQuandoAreaNaoExiste() {
-        when(areaService.buscarPorId(areaId)).thenThrow(new AreaNaoEncontradaException(areaId));
+    void criar_propagaExcecaoQuandoSubdivisaoNaoExiste() {
+        when(subdivisaoService.buscarAtivaParaVinculo(subdivisaoId)).thenThrow(new SubdivisaoNaoEncontradaException(subdivisaoId));
 
-        assertThatThrownBy(() -> congregacaoService.criar(new CongregacaoRequest(areaId, "Sede", null)))
-                .isInstanceOf(AreaNaoEncontradaException.class);
+        assertThatThrownBy(() -> congregacaoService.criar(new CongregacaoRequest(subdivisaoId, "Sede", null)))
+                .isInstanceOf(SubdivisaoNaoEncontradaException.class);
         verify(congregacaoRepository, never()).save(any());
     }
 
     @Test
-    void criar_lancaExcecaoENaoGravaEnderecoQuandoNomeJaExisteNaArea() {
-        when(areaService.buscarPorId(areaId)).thenReturn(area);
-        when(congregacaoRepository.existsByAreaIdAndNomeIgnoreCase(areaId, "Sede")).thenReturn(true);
+    void criar_lancaExcecaoENaoGravaEnderecoQuandoNomeJaExisteNaSubdivisao() {
+        when(subdivisaoService.buscarAtivaParaVinculo(subdivisaoId)).thenReturn(subdivisao);
+        when(congregacaoRepository.existsBySubdivisaoIdAndNomeIgnoreCase(subdivisaoId, "Sede")).thenReturn(true);
 
-        assertThatThrownBy(() -> congregacaoService.criar(new CongregacaoRequest(areaId, "Sede", enderecoRequest)))
+        assertThatThrownBy(() -> congregacaoService.criar(new CongregacaoRequest(subdivisaoId, "Sede", enderecoRequest)))
                 .isInstanceOf(CongregacaoNomeDuplicadoException.class);
         verify(congregacaoRepository, never()).save(any());
         verifyNoInteractions(enderecoService);
@@ -124,7 +126,7 @@ class CongregacaoServiceTest {
     @Test
     void buscarPorId_retornaCongregacaoExistente() {
         UUID id = UUID.randomUUID();
-        Congregacao existente = congregacaoExistente(id, area, null);
+        Congregacao existente = congregacaoExistente(id, subdivisao, null);
         when(congregacaoRepository.findById(id)).thenReturn(Optional.of(existente));
 
         assertThat(congregacaoService.buscarPorId(id)).isSameAs(existente);
@@ -141,45 +143,45 @@ class CongregacaoServiceTest {
 
     @Test
     void listar_delegaAoRepositorioOrdenandoPorNome() {
-        List<Congregacao> lista = List.of(congregacaoExistente(UUID.randomUUID(), area, null));
+        List<Congregacao> lista = List.of(congregacaoExistente(UUID.randomUUID(), subdivisao, null));
         when(congregacaoRepository.findAll(ArgumentMatchers.<Specification<Congregacao>>any(), any(Sort.class)))
                 .thenReturn(lista);
 
-        assertThat(congregacaoService.listar(areaId, true)).isSameAs(lista);
+        assertThat(congregacaoService.listar(null, subdivisaoId, true)).isSameAs(lista);
         verify(congregacaoRepository).findAll(ArgumentMatchers.<Specification<Congregacao>>any(), eq(Sort.by("nome")));
     }
 
     // ---------- atualizar ----------
 
     @Test
-    void atualizar_naMesmaAreaAlteraNomeEAtualizaEnderecoExistenteSemConsultarArea() {
+    void atualizar_naMesmaSubdivisaoAlteraNomeEAtualizaEnderecoExistenteSemConsultarSubdivisao() {
         UUID id = UUID.randomUUID();
         UUID enderecoId = UUID.randomUUID();
         Endereco endereco = Endereco.builder().id(enderecoId).build();
-        Congregacao existente = congregacaoExistente(id, area, endereco);
+        Congregacao existente = congregacaoExistente(id, subdivisao, endereco);
         when(congregacaoRepository.findById(id)).thenReturn(Optional.of(existente));
-        when(congregacaoRepository.existsByAreaIdAndNomeIgnoreCaseAndIdNot(areaId, "Sede Nova", id)).thenReturn(false);
+        when(congregacaoRepository.existsBySubdivisaoIdAndNomeIgnoreCaseAndIdNot(subdivisaoId, "Sede Nova", id)).thenReturn(false);
         when(congregacaoRepository.save(any(Congregacao.class))).thenAnswer(invocacao -> invocacao.getArgument(0));
 
-        Congregacao atualizada = congregacaoService.atualizar(id, new CongregacaoRequest(areaId, " Sede Nova ", enderecoRequest));
+        Congregacao atualizada = congregacaoService.atualizar(id, new CongregacaoRequest(subdivisaoId, " Sede Nova ", enderecoRequest));
 
         assertThat(atualizada.getNome()).isEqualTo("Sede Nova");
-        assertThat(atualizada.getArea()).isSameAs(area);
+        assertThat(atualizada.getSubdivisao()).isSameAs(subdivisao);
         verify(enderecoService).atualizar(enderecoId, enderecoRequest);
         verify(enderecoService, never()).criar(any());
-        verifyNoInteractions(areaService);
+        verifyNoInteractions(subdivisaoService);
     }
 
     @Test
     void atualizar_semEnderecoNoRequestMantemOEnderecoAtual() {
         UUID id = UUID.randomUUID();
         Endereco endereco = Endereco.builder().id(UUID.randomUUID()).build();
-        Congregacao existente = congregacaoExistente(id, area, endereco);
+        Congregacao existente = congregacaoExistente(id, subdivisao, endereco);
         when(congregacaoRepository.findById(id)).thenReturn(Optional.of(existente));
-        when(congregacaoRepository.existsByAreaIdAndNomeIgnoreCaseAndIdNot(areaId, "Sede", id)).thenReturn(false);
+        when(congregacaoRepository.existsBySubdivisaoIdAndNomeIgnoreCaseAndIdNot(subdivisaoId, "Sede", id)).thenReturn(false);
         when(congregacaoRepository.save(any(Congregacao.class))).thenAnswer(invocacao -> invocacao.getArgument(0));
 
-        Congregacao atualizada = congregacaoService.atualizar(id, new CongregacaoRequest(areaId, "Sede", null));
+        Congregacao atualizada = congregacaoService.atualizar(id, new CongregacaoRequest(subdivisaoId, "Sede", null));
 
         assertThat(atualizada.getEndereco()).isSameAs(endereco);
         verifyNoInteractions(enderecoService);
@@ -189,73 +191,74 @@ class CongregacaoServiceTest {
     void atualizar_congregacaoSemEnderecoCriaEVinculaQuandoRequestTrazEndereco() {
         UUID id = UUID.randomUUID();
         Endereco novo = Endereco.builder().id(UUID.randomUUID()).build();
-        Congregacao existente = congregacaoExistente(id, area, null);
+        Congregacao existente = congregacaoExistente(id, subdivisao, null);
         when(congregacaoRepository.findById(id)).thenReturn(Optional.of(existente));
-        when(congregacaoRepository.existsByAreaIdAndNomeIgnoreCaseAndIdNot(areaId, "Sede", id)).thenReturn(false);
+        when(congregacaoRepository.existsBySubdivisaoIdAndNomeIgnoreCaseAndIdNot(subdivisaoId, "Sede", id)).thenReturn(false);
         when(enderecoService.criar(enderecoRequest)).thenReturn(novo);
         when(congregacaoRepository.save(any(Congregacao.class))).thenAnswer(invocacao -> invocacao.getArgument(0));
 
-        Congregacao atualizada = congregacaoService.atualizar(id, new CongregacaoRequest(areaId, "Sede", enderecoRequest));
+        Congregacao atualizada = congregacaoService.atualizar(id, new CongregacaoRequest(subdivisaoId, "Sede", enderecoRequest));
 
         assertThat(atualizada.getEndereco()).isSameAs(novo);
         verify(enderecoService, never()).atualizar(any(), any());
     }
 
     @Test
-    void atualizar_remanejaParaOutraAreaAtivaValidandoNomeNoDestino() {
+    void atualizar_remanejaParaOutraSubdivisaoAtivaValidandoNomeNoDestino() {
         UUID id = UUID.randomUUID();
         UUID destinoId = UUID.randomUUID();
-        Area destino = Area.builder().id(destinoId).numero(41).nome("Área 41").build();
-        Congregacao existente = congregacaoExistente(id, area, null);
+        Subdivisao destino = HierarquiaTeste.subdivisaoDaArea40(UUID.randomUUID(), destinoId);
+        Congregacao existente = congregacaoExistente(id, subdivisao, null);
         when(congregacaoRepository.findById(id)).thenReturn(Optional.of(existente));
-        when(areaService.buscarPorId(destinoId)).thenReturn(destino);
-        when(congregacaoRepository.existsByAreaIdAndNomeIgnoreCaseAndIdNot(destinoId, "Sede", id)).thenReturn(false);
+        when(subdivisaoService.buscarAtivaParaVinculo(destinoId)).thenReturn(destino);
+        when(congregacaoRepository.existsBySubdivisaoIdAndNomeIgnoreCaseAndIdNot(destinoId, "Sede", id)).thenReturn(false);
         when(congregacaoRepository.save(any(Congregacao.class))).thenAnswer(invocacao -> invocacao.getArgument(0));
 
         Congregacao atualizada = congregacaoService.atualizar(id, new CongregacaoRequest(destinoId, "Sede", null));
 
-        assertThat(atualizada.getArea()).isSameAs(destino);
+        assertThat(atualizada.getSubdivisao()).isSameAs(destino);
     }
 
     @Test
     void atualizar_lancaExcecaoENaoGravaQuandoDestinoDoRemanejamentoEstaInativo() {
         UUID id = UUID.randomUUID();
         UUID destinoId = UUID.randomUUID();
-        Area destinoInativo = Area.builder().id(destinoId).numero(41).nome("Área 41").ativa(false).build();
-        Congregacao existente = congregacaoExistente(id, area, null);
+        // o destino inativo é recusado pelo SubdivisaoService, que é quem sabe se está ativa
+        Congregacao existente = congregacaoExistente(id, subdivisao, null);
         when(congregacaoRepository.findById(id)).thenReturn(Optional.of(existente));
-        when(areaService.buscarPorId(destinoId)).thenReturn(destinoInativo);
+        when(subdivisaoService.buscarAtivaParaVinculo(destinoId)).thenThrow(new SubdivisaoInativaException());
 
         assertThatThrownBy(() -> congregacaoService.atualizar(id, new CongregacaoRequest(destinoId, "Sede", null)))
-                .isInstanceOf(AreaInativaException.class);
-        assertThat(existente.getArea()).isSameAs(area);
+                .isInstanceOf(SubdivisaoInativaException.class);
+        assertThat(existente.getSubdivisao()).isSameAs(subdivisao);
         verify(congregacaoRepository, never()).save(any());
     }
 
     @Test
-    void atualizar_lancaExcecaoQuandoNomeJaExisteNaAreaDeDestino() {
+    void atualizar_lancaExcecaoQuandoNomeJaExisteNaSubdivisaoDeDestino() {
         UUID id = UUID.randomUUID();
-        Congregacao existente = congregacaoExistente(id, area, null);
+        Congregacao existente = congregacaoExistente(id, subdivisao, null);
         when(congregacaoRepository.findById(id)).thenReturn(Optional.of(existente));
-        when(congregacaoRepository.existsByAreaIdAndNomeIgnoreCaseAndIdNot(areaId, "Filial", id)).thenReturn(true);
+        when(congregacaoRepository.existsBySubdivisaoIdAndNomeIgnoreCaseAndIdNot(subdivisaoId, "Filial", id)).thenReturn(true);
 
-        assertThatThrownBy(() -> congregacaoService.atualizar(id, new CongregacaoRequest(areaId, "Filial", enderecoRequest)))
+        assertThatThrownBy(() -> congregacaoService.atualizar(id, new CongregacaoRequest(subdivisaoId, "Filial", enderecoRequest)))
                 .isInstanceOf(CongregacaoNomeDuplicadoException.class);
         verify(congregacaoRepository, never()).save(any());
         verifyNoInteractions(enderecoService);
     }
 
     @Test
-    void atualizar_congregacaoInativaEmAreaInativaPodeSerRenomeadaSemExigirAreaAtiva() {
+    void atualizar_congregacaoInativaEmSubdivisaoInativaPodeSerRenomeadaSemExigirSubdivisaoAtiva() {
         UUID id = UUID.randomUUID();
-        Area inativa = Area.builder().id(areaId).numero(40).nome("Área 40").ativa(false).build();
+        Subdivisao inativa = HierarquiaTeste.subdivisaoDaArea40(UUID.randomUUID(), subdivisaoId);
+        inativa.setAtivo(false);
         Congregacao existente = congregacaoExistente(id, inativa, null);
         existente.setAtiva(false);
         when(congregacaoRepository.findById(id)).thenReturn(Optional.of(existente));
-        when(congregacaoRepository.existsByAreaIdAndNomeIgnoreCaseAndIdNot(areaId, "Sede Antiga", id)).thenReturn(false);
+        when(congregacaoRepository.existsBySubdivisaoIdAndNomeIgnoreCaseAndIdNot(subdivisaoId, "Sede Antiga", id)).thenReturn(false);
         when(congregacaoRepository.save(any(Congregacao.class))).thenAnswer(invocacao -> invocacao.getArgument(0));
 
-        Congregacao atualizada = congregacaoService.atualizar(id, new CongregacaoRequest(areaId, "Sede Antiga", null));
+        Congregacao atualizada = congregacaoService.atualizar(id, new CongregacaoRequest(subdivisaoId, "Sede Antiga", null));
 
         assertThat(atualizada.getNome()).isEqualTo("Sede Antiga");
     }
@@ -265,7 +268,7 @@ class CongregacaoServiceTest {
         UUID id = UUID.randomUUID();
         when(congregacaoRepository.findById(id)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> congregacaoService.atualizar(id, new CongregacaoRequest(areaId, "Sede", null)))
+        assertThatThrownBy(() -> congregacaoService.atualizar(id, new CongregacaoRequest(subdivisaoId, "Sede", null)))
                 .isInstanceOf(CongregacaoNaoEncontradaException.class);
         verify(congregacaoRepository, never()).save(any());
     }
@@ -275,7 +278,7 @@ class CongregacaoServiceTest {
     @Test
     void inativar_marcaComoInativaSemRemoverDoBanco() {
         UUID id = UUID.randomUUID();
-        Congregacao existente = congregacaoExistente(id, area, null);
+        Congregacao existente = congregacaoExistente(id, subdivisao, null);
         when(congregacaoRepository.findById(id)).thenReturn(Optional.of(existente));
 
         congregacaoService.inativar(id);
@@ -296,9 +299,9 @@ class CongregacaoServiceTest {
     }
 
     @Test
-    void reativar_marcaComoAtivaQuandoAreaEstaAtiva() {
+    void reativar_marcaComoAtivaQuandoSubdivisaoEAgrupamentoEstaoAtivos() {
         UUID id = UUID.randomUUID();
-        Congregacao inativa = congregacaoExistente(id, area, null);
+        Congregacao inativa = congregacaoExistente(id, subdivisao, null);
         inativa.setAtiva(false);
         when(congregacaoRepository.findById(id)).thenReturn(Optional.of(inativa));
         when(congregacaoRepository.save(any(Congregacao.class))).thenAnswer(invocacao -> invocacao.getArgument(0));
@@ -307,15 +310,30 @@ class CongregacaoServiceTest {
     }
 
     @Test
-    void reativar_lancaExcecaoENaoAlteraQuandoAreaEstaInativa() {
+    void reativar_lancaExcecaoENaoAlteraQuandoSubdivisaoEstaInativa() {
         UUID id = UUID.randomUUID();
-        Area areaInativa = Area.builder().id(areaId).numero(40).nome("Área 40").ativa(false).build();
-        Congregacao inativa = congregacaoExistente(id, areaInativa, null);
+        Subdivisao subdivisaoInativa = HierarquiaTeste.subdivisaoDaArea40(UUID.randomUUID(), subdivisaoId);
+        subdivisaoInativa.setAtivo(false);
+        Congregacao inativa = congregacaoExistente(id, subdivisaoInativa, null);
         inativa.setAtiva(false);
         when(congregacaoRepository.findById(id)).thenReturn(Optional.of(inativa));
 
         assertThatThrownBy(() -> congregacaoService.reativar(id))
-                .isInstanceOf(AreaInativaException.class);
+                .isInstanceOf(SubdivisaoInativaException.class);
+        assertThat(inativa.isAtiva()).isFalse();
+        verify(congregacaoRepository, never()).save(any());
+    }
+
+    @Test
+    void reativar_lancaExcecaoQuandoOAgrupamentoDaSubdivisaoEstaInativo() {
+        UUID id = UUID.randomUUID();
+        subdivisao.getAgrupamento().setAtivo(false);
+        Congregacao inativa = congregacaoExistente(id, subdivisao, null);
+        inativa.setAtiva(false);
+        when(congregacaoRepository.findById(id)).thenReturn(Optional.of(inativa));
+
+        assertThatThrownBy(() -> congregacaoService.reativar(id))
+                .isInstanceOf(SubdivisaoInativaException.class);
         assertThat(inativa.isAtiva()).isFalse();
         verify(congregacaoRepository, never()).save(any());
     }

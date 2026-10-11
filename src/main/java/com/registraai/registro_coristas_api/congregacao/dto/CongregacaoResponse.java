@@ -1,6 +1,7 @@
 package com.registraai.registro_coristas_api.congregacao.dto;
 
-import com.registraai.registro_coristas_api.area.dto.AreaResponse;
+import com.registraai.registro_coristas_api.agrupamento.dto.AgrupamentoResponse;
+import com.registraai.registro_coristas_api.agrupamento.dto.SubdivisaoResponse;
 import com.registraai.registro_coristas_api.congregacao.model.Congregacao;
 import com.registraai.registro_coristas_api.endereco.dto.EnderecoResponse;
 
@@ -9,7 +10,8 @@ import java.util.UUID;
 
 public record CongregacaoResponse(
         UUID id,
-        AreaResponse area,
+        AgrupamentoResponse agrupamento,
+        SubdivisaoResponse subdivisao,
         String nome,
         boolean ativa,
         EnderecoResponse endereco,
@@ -20,7 +22,8 @@ public record CongregacaoResponse(
     public static CongregacaoResponse de(Congregacao congregacao) {
         return new CongregacaoResponse(
                 congregacao.getId(),
-                AreaResponse.de(congregacao.getArea()),
+                AgrupamentoResponse.de(congregacao.getSubdivisao().getAgrupamento()),
+                SubdivisaoResponse.de(congregacao.getSubdivisao()),
                 congregacao.getNome(),
                 congregacao.isAtiva(),
                 congregacao.getEndereco() == null ? null : EnderecoResponse.de(congregacao.getEndereco()),

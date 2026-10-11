@@ -228,7 +228,7 @@ class CoristaServiceTest {
         Pageable esperado = PageRequest.of(2, 15, Sort.by("pessoa.nome").and(Sort.by("id")));
         when(coristaRepository.findAll(ArgumentMatchers.<Specification<Corista>>any(), eq(esperado))).thenReturn(pagina);
 
-        assertThat(coristaService.listar(new CoristaFiltro(null, null, null, null, null), 2, 15)).isSameAs(pagina);
+        assertThat(coristaService.listar(new CoristaFiltro(null, null, null, null, null, null), 2, 15)).isSameAs(pagina);
     }
 
     // ---------- atualizar ----------
@@ -539,7 +539,7 @@ class CoristaServiceTest {
     void listar_semRecorte_devolvePaginaVaziaSemConsultarOBanco() {
         logadoComo(usuario("CORISTA_JOVENS"));
 
-        Page<Corista> pagina = coristaService.listar(new CoristaFiltro(null, null, null, null, null), 0, 20);
+        Page<Corista> pagina = coristaService.listar(new CoristaFiltro(null, null, null, null, null, null), 0, 20);
 
         assertThat(pagina.getContent()).isEmpty();
         verify(coristaRepository, never()).findAll(ArgumentMatchers.<Specification<Corista>>any(), any(Pageable.class));
@@ -551,7 +551,7 @@ class CoristaServiceTest {
         when(coristaRepository.findAll(ArgumentMatchers.<Specification<Corista>>any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
-        coristaService.listar(new CoristaFiltro(null, null, null, null, null), 0, 20);
+        coristaService.listar(new CoristaFiltro(null, null, null, null, null, null), 0, 20);
 
         verify(coristaRepository).findAll(ArgumentMatchers.<Specification<Corista>>any(), any(Pageable.class));
     }

@@ -1,6 +1,6 @@
 package com.registraai.registro_coristas_api.congregacao.model;
 
-import com.registraai.registro_coristas_api.area.model.Area;
+import com.registraai.registro_coristas_api.agrupamento.model.Subdivisao;
 import com.registraai.registro_coristas_api.endereco.model.Endereco;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -35,9 +35,10 @@ public class Congregacao {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    /** O agrupamento (campo missionário, filial, setor ou área) vem pela subdivisão. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "area_id", nullable = false)
-    private Area area;
+    @JoinColumn(name = "subdivisao_id", nullable = false)
+    private Subdivisao subdivisao;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "endereco_id")

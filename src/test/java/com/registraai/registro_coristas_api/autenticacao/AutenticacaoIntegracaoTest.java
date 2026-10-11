@@ -1,6 +1,7 @@
 package com.registraai.registro_coristas_api.autenticacao;
 
 import com.registraai.registro_coristas_api.suporte.UsuarioTesteFactory;
+import com.registraai.registro_coristas_api.suporte.HierarquiaTeste;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -61,13 +62,11 @@ class AutenticacaoIntegracaoTest {
     }
 
     private String criarCongregacao(int numeroDaArea) throws Exception {
-        String areaLocation = mockMvc.perform(post("/v1/api/areas").with(admin()).contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"numero\": %d, \"nome\": \"Área %d\" }".formatted(numeroDaArea, numeroDaArea)))
-                .andExpect(status().isCreated()).andReturn().getResponse().getHeader("Location");
+        String subdivisaoId = HierarquiaTeste.criarSubdivisao(mockMvc, admin());
         String congregacaoLocation = mockMvc.perform(post("/v1/api/congregacoes").with(admin())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"areaId\": \"%s\", \"nome\": \"Sede %d\" }"
-                                .formatted(idDoLocation(areaLocation), numeroDaArea)))
+                        .content("{ \"subdivisaoId\": \"%s\", \"nome\": \"Sede %d\" }"
+                                .formatted(subdivisaoId, numeroDaArea)))
                 .andExpect(status().isCreated()).andReturn().getResponse().getHeader("Location");
         return idDoLocation(congregacaoLocation);
     }
@@ -247,27 +246,29 @@ class AutenticacaoIntegracaoTest {
     }
 
     @Test
-    void corista_naoAcessaAreasCongregacoesAlteracoesNemUsuarios() throws Exception {
+    void corista_naoAcessaAgrupamentosCongregacoesAlteracoesNemUsuarios() throws Exception {
         String congregacaoId = criarCongregacao(7);
         aprovar(autoCadastrar(congregacaoId, "Hugo", "hugo@exemplo.com"));
         String token = bearer(tokenDe("hugo@exemplo.com"));
 
         mockMvc.perform(get("/v1/api/usuarios").header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(post("/v1/api/areas").header(HttpHeaders.AUTHORIZATION, token)
-                        .contentType(MediaType.APPLICATION_JSON).content("{ \"numero\": 99, \"nome\": \"Invasora\" }"))
+        mockMvc.perform(post("/v1/api/agrupamentos").header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{ \"tipo\": \"AREA\", \"numero\": 99 }"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/v1/api/pessoas").header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    void listaDeCongregacoes_ePublica_masAreasExigemLogin() throws Exception {
+    void listaDeCongregacoesEAgrupamentos_ePublica_masOsUsuariosExigemLogin() throws Exception {
         criarCongregacao(8);
 
         mockMvc.perform(get("/v1/api/congregacoes"))
                 .andExpect(status().isOk());
-        mockMvc.perform(get("/v1/api/areas"))
+        mockMvc.perform(get("/v1/api/agrupamentos"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/v1/api/usuarios"))
                 .andExpect(status().isUnauthorized());
     }
 }
