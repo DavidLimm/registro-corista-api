@@ -2,6 +2,8 @@ package com.registraai.registro_coristas_api.role.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -47,6 +49,21 @@ public class Role {
     @Builder.Default
     @Column(nullable = false)
     private boolean ativo = true;
+
+    /** Fluxo de solicitação: papel pedido nasce PENDENTE e inativo; os criados direto (ou antigos) são APROVADA. */
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private StatusRole status = StatusRole.APROVADA;
+
+    @Column(name = "solicitado_por")
+    private UUID solicitadoPor;
+
+    @Column(name = "decidido_por")
+    private UUID decididoPor;
+
+    @Column(name = "decidido_em")
+    private Instant decididoEm;
 
     /** Permissões concedidas a este papel, gravadas em {@code role_permissao}. Editáveis pelo PASTOR. */
     @Builder.Default
