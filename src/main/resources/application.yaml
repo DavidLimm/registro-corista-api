@@ -33,3 +33,7 @@ spring:
 logging:
   level:
     org.hibernate.orm.jdbc.bind: TRACE # mostra os valores dos parâmetros (?) das queries
+
+jwt:
+  segredo: ${JWT_SEGREDO:6fxzEGdzPXqamvjE0C37s5N/0moHscFg+i9cNn4RZJY=}
+  expiracao-minutos: ${JWT_EXPIRACAO_MINUTOS:60}
