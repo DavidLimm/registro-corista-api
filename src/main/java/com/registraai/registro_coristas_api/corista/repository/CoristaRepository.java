@@ -19,6 +19,11 @@ public interface CoristaRepository extends JpaRepository<Corista, UUID>, JpaSpec
     @EntityGraph(attributePaths = {"pessoa", "pessoa.congregacao", "pessoa.congregacao.area", "pessoa.endereco"})
     Optional<Corista> findById(UUID id);
 
+    @EntityGraph(attributePaths = {"pessoa", "pessoa.congregacao", "pessoa.congregacao.area", "pessoa.endereco"})
+    Optional<Corista> findByPessoaId(UUID pessoaId);
+
+    boolean existsByIdAndPessoaIdAndDesligadoEmIsNull(UUID id, UUID pessoaId);
+
     @Override
     @EntityGraph(attributePaths = {"pessoa", "pessoa.congregacao", "pessoa.congregacao.area", "pessoa.endereco"})
     Page<Corista> findAll(Specification<Corista> spec, Pageable pageable);

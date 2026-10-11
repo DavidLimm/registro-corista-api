@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.web.PagedModel;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -32,6 +33,7 @@ public class UsuarioController {
 
     private final UsuarioService usuarioService;
 
+    @PreAuthorize("hasAuthority('USUARIO_GERENCIAR')")
     @PostMapping
     public ResponseEntity<UsuarioResponse> criar(@Valid @RequestBody UsuarioRequest request) {
         Usuario usuario = usuarioService.criar(request);
@@ -43,6 +45,7 @@ public class UsuarioController {
     }
 
     /** Paginada e ordenada por e-mail. Filtro opcional: {@code ativo}. */
+    @PreAuthorize("hasAuthority('USUARIO_GERENCIAR')")
     @GetMapping
     public PagedModel<UsuarioResponse> listar(@RequestParam(required = false) Boolean ativo,
                                               @RequestParam(defaultValue = "0") @Min(0) int page,
@@ -50,23 +53,27 @@ public class UsuarioController {
         return new PagedModel<>(usuarioService.listar(ativo, page, size).map(UsuarioResponse::de));
     }
 
+    @PreAuthorize("hasAuthority('USUARIO_GERENCIAR')")
     @GetMapping("/{id}")
     public UsuarioResponse buscarPorId(@PathVariable UUID id) {
         return UsuarioResponse.de(usuarioService.buscarPorId(id));
     }
 
+    @PreAuthorize("hasAuthority('USUARIO_GERENCIAR')")
     @PutMapping("/{id}")
     public UsuarioResponse atualizar(@PathVariable UUID id, @Valid @RequestBody UsuarioRequest request) {
         return UsuarioResponse.de(usuarioService.atualizar(id, request));
     }
 
     /** Soft delete: marca o usuário como inativo (não remove a linha). */
+    @PreAuthorize("hasAuthority('USUARIO_GERENCIAR')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> inativar(@PathVariable UUID id) {
         usuarioService.inativar(id);
         return ResponseEntity.noContent().build();
     }
 
+    @PreAuthorize("hasAuthority('USUARIO_GERENCIAR')")
     @PatchMapping("/{id}/reativar")
     public UsuarioResponse reativar(@PathVariable UUID id) {
         return UsuarioResponse.de(usuarioService.reativar(id));

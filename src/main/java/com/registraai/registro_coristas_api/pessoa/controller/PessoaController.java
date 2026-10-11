@@ -9,8 +9,11 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import com.registraai.registro_coristas_api.usuario.model.Usuario;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.data.web.PagedModel;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -41,6 +44,7 @@ public class PessoaController {
     private final Clock clock;
 
     /** Entra sempre como {@code PENDENTE}. Menores exigem responsável legal e consentimento LGPD. */
+    @PreAuthorize("hasAuthority('PESSOA_CRIAR')")
     @PostMapping
     public ResponseEntity<PessoaResponse> criar(@Valid @RequestBody PessoaRequest request) {
         Pessoa pessoa = pessoaService.criar(request);
@@ -54,6 +58,7 @@ public class PessoaController {
     /**
      * Paginada e ordenada por nome. Filtros opcionais: nome (trecho), areaId, congregacaoId, faixaEtaria, status.
      */
+    @PreAuthorize("hasAuthority('PESSOA_LER')")
     @GetMapping
     public PagedModel<PessoaResponse> listar(PessoaFiltro filtro,
                                              @RequestParam(defaultValue = "0") @Min(0) int page,
@@ -62,6 +67,7 @@ public class PessoaController {
         return new PagedModel<>(pessoaService.listar(filtro, page, size).map(pessoa -> PessoaResponse.de(pessoa, hoje)));
     }
 
+    @PreAuthorize("hasAuthority('PESSOA_LER')")
     @GetMapping("/{id}")
     public PessoaResponse buscarPorId(@PathVariable UUID id) {
         return PessoaResponse.de(pessoaService.buscarPorId(id), hoje());
@@ -71,12 +77,14 @@ public class PessoaController {
      * Status e aprovação não mudam por aqui. Para quem é corista, prefira {@code PUT /v1/api/coristas/{id}}: só ele
      * reclassifica a lista (adolescente/jovem) quando a data de nascimento muda.
      */
+    @PreAuthorize("hasAuthority('PESSOA_ATUALIZAR')")
     @PutMapping("/{id}")
     public PessoaResponse atualizar(@PathVariable UUID id, @Valid @RequestBody PessoaRequest request) {
         return PessoaResponse.de(pessoaService.atualizar(id, request), hoje());
     }
 
     /** Soft delete: o cadastro passa a {@code INATIVO} (não remove a linha). */
+    @PreAuthorize("hasAuthority('PESSOA_INATIVAR')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> inativar(@PathVariable UUID id) {
         pessoaService.inativar(id);
@@ -84,38 +92,40 @@ public class PessoaController {
     }
 
     /**
-     * {@code PENDENTE -> APROVADO}. TODO(autenticação): {@code aprovadoPor} deve vir do usuário logado, e sua role
-     * validada contra o recorte da pessoa (adolescente: {@code DIRIGENTE_UNIAO}+líderes; jovem:
-     * {@code LIDERANCA_GRUPO_JOVEM}/{@code DIRIGENTE_CAMPANHA}+líderes) — ainda não há autenticação, então por ora
-     * qualquer chamador pode informar qualquer {@code aprovadoPor}.
+     * {@code PENDENTE -> APROVADO}, registrando o usuário logado como aprovador. TODO(escopo): validar a role contra o
+     * recorte da pessoa (adolescente: {@code DIRIGENTE_UNIAO}+líderes; jovem:
+     * {@code LIDERANCA_GRUPO_JOVEM}/{@code DIRIGENTE_CAMPANHA}+líderes) e contra a área — hoje basta ter a permissão.
      */
+    @PreAuthorize("hasAuthority('PESSOA_APROVAR')")
     @PatchMapping("/{id}/aprovar")
-    public PessoaResponse aprovar(@PathVariable UUID id, @RequestParam UUID aprovadoPor) {
-        return PessoaResponse.de(pessoaService.aprovar(id, aprovadoPor), hoje());
+    public PessoaResponse aprovar(@PathVariable UUID id, @AuthenticationPrincipal Usuario usuario) {
+        return PessoaResponse.de(pessoaService.aprovar(id, usuario.getId()), hoje());
     }
 
-    /** {@code PENDENTE -> REPROVADO}. Mesma ressalva de {@link #aprovar} sobre a falta de autenticação. */
+    /** {@code PENDENTE -> REPROVADO}, registrando o usuário logado. Mesma pendência de escopo de {@link #aprovar}. */
+    @PreAuthorize("hasAuthority('PESSOA_REPROVAR')")
     @PatchMapping("/{id}/reprovar")
-    public PessoaResponse reprovar(@PathVariable UUID id, @RequestParam UUID reprovadoPor) {
-        return PessoaResponse.de(pessoaService.reprovar(id, reprovadoPor), hoje());
+    public PessoaResponse reprovar(@PathVariable UUID id, @AuthenticationPrincipal Usuario usuario) {
+        return PessoaResponse.de(pessoaService.reprovar(id, usuario.getId()), hoje());
     }
 
     /**
-     * {@code APROVADO -> AFASTADO}. TODO(autenticação): só LIDER_MOCIDADE e PASTOR podem afastar (permissão
-     * {@code CORISTA_APROVAR_AFASTAMENTO}); por ora qualquer chamador informa qualquer {@code afastadoPor}.
+     * {@code APROVADO -> AFASTADO}. Só quem tem {@code CORISTA_APROVAR_AFASTAMENTO} (LIDER_MOCIDADE e PASTOR); o
+     * usuário logado fica registrado como quem afastou.
      */
+    @PreAuthorize("hasAuthority('CORISTA_APROVAR_AFASTAMENTO')")
     @PatchMapping("/{id}/afastar")
-    public PessoaResponse afastar(@PathVariable UUID id, @RequestParam UUID afastadoPor) {
-        return PessoaResponse.de(pessoaService.afastar(id, afastadoPor), hoje());
+    public PessoaResponse afastar(@PathVariable UUID id, @AuthenticationPrincipal Usuario usuario) {
+        return PessoaResponse.de(pessoaService.afastar(id, usuario.getId()), hoje());
     }
 
     /**
-     * {@code AFASTADO -> APROVADO}. TODO(autenticação): mesma permissão de {@link #afastar}
-     * ({@code CORISTA_APROVAR_AFASTAMENTO}); {@code retornadoPor} deve vir do usuário logado.
+     * {@code AFASTADO -> APROVADO}. Mesma permissão de {@link #afastar}; o usuário logado fica registrado.
      */
+    @PreAuthorize("hasAuthority('CORISTA_APROVAR_AFASTAMENTO')")
     @PatchMapping("/{id}/retornar-do-afastamento")
-    public PessoaResponse retornarDoAfastamento(@PathVariable UUID id, @RequestParam UUID retornadoPor) {
-        return PessoaResponse.de(pessoaService.retornarDoAfastamento(id, retornadoPor), hoje());
+    public PessoaResponse retornarDoAfastamento(@PathVariable UUID id, @AuthenticationPrincipal Usuario usuario) {
+        return PessoaResponse.de(pessoaService.retornarDoAfastamento(id, usuario.getId()), hoje());
     }
 
     private LocalDate hoje() {

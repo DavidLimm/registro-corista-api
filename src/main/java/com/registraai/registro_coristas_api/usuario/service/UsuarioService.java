@@ -7,13 +7,16 @@ import com.registraai.registro_coristas_api.role.exception.RoleNaoEncontradaExce
 import com.registraai.registro_coristas_api.role.model.Role;
 import com.registraai.registro_coristas_api.role.repository.RoleRepository;
 import com.registraai.registro_coristas_api.usuario.dto.UsuarioRequest;
+import com.registraai.registro_coristas_api.usuario.event.PessoaVirouLiderEvent;
 import com.registraai.registro_coristas_api.usuario.exception.UsuarioNaoEncontradoException;
 import com.registraai.registro_coristas_api.usuario.exception.UsuarioPessoaImutavelException;
 import com.registraai.registro_coristas_api.usuario.exception.EmailDuplicadoException;
+import com.registraai.registro_coristas_api.usuario.exception.PapelCoristaExclusivoException;
 import com.registraai.registro_coristas_api.usuario.exception.PessoaJaPossuiUsuarioException;
 import com.registraai.registro_coristas_api.usuario.model.Usuario;
 import com.registraai.registro_coristas_api.usuario.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -22,6 +25,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -43,6 +47,7 @@ public class UsuarioService {
     private final PessoaService pessoaService;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ApplicationEventPublisher eventos;
 
     /** A pessoa ainda não pode ter usuário; o e-mail é único no sistema. */
     @Transactional
@@ -83,7 +88,9 @@ public class UsuarioService {
         usuario.setEmail(emailNormalizado);
         usuario.setSenhaHash(passwordEncoder.encode(senha));
         usuario.setRoles(rolesSupplier.get());
-        return usuarioRepository.save(usuario);
+        Usuario salvo = usuarioRepository.save(usuario);
+        avisarSeVirouLider(salvo);
+        return salvo;
     }
 
     @Transactional(readOnly = true)
@@ -119,8 +126,14 @@ public class UsuarioService {
         }
         usuario.setEmail(email);
         usuario.setSenhaHash(passwordEncoder.encode(request.senha()));
+        // senha redefinida por quem administra: derruba os tokens antigos e libera a conta se estava bloqueada
+        usuario.setSenhaAlteradaEm(Instant.now());
+        usuario.setTentativasFalhas(0);
+        usuario.setBloqueadoEm(null);
         usuario.setRoles(buscarRolesAtivas(request.roleIds()));
-        return usuarioRepository.save(usuario);
+        Usuario salvo = usuarioRepository.save(usuario);
+        avisarSeVirouLider(salvo);
+        return salvo;
     }
 
     /** Soft delete: o usuário fica {@code ativo = false} (não deve conseguir autenticar), mas permanece no banco. */
@@ -151,7 +164,19 @@ public class UsuarioService {
                 throw new RoleInativaException(role.getNome());
             }
         }
+        // nenhum corista é líder: o papel de corista não convive com nenhum outro
+        if (roles.size() > 1 && roles.stream().anyMatch(role -> role.getNome().startsWith("CORISTA_"))) {
+            throw new PapelCoristaExclusivoException();
+        }
         return new LinkedHashSet<>(roles);
+    }
+
+    // nenhum corista é líder: quem recebe um papel que não é de corista tem o cadastro de corista desligado
+    private void avisarSeVirouLider(Usuario usuario) {
+        boolean temPapelDeLideranca = usuario.getRoles().stream().anyMatch(role -> !role.getNome().startsWith("CORISTA_"));
+        if (temPapelDeLideranca) {
+            eventos.publishEvent(new PessoaVirouLiderEvent(usuario.getPessoa().getId()));
+        }
     }
 
     private String normalizarEmail(String email) {

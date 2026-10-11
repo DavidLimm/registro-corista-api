@@ -25,6 +25,7 @@ public enum Permissao {
     CORISTA_PROMOVER,            // promoção antecipada ADOLESCENTE -> JOVEM (irreversível)
     CORISTA_SOLICITAR_AFASTAMENTO, // pedir afastamento de um corista
     CORISTA_APROVAR_AFASTAMENTO,   // aprovar ou reverter o afastamento (apenas LIDER_MOCIDADE e PASTOR)
+    CORISTA_CORRIGIR_NASCIMENTO,   // corrigir a data de nascimento de um corista (líderes); o próprio corista não altera
 
     // Estrutura da igreja
     AREA_GERENCIAR,          // criar, editar e inativar áreas (apenas PASTOR)
