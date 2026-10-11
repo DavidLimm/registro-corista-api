@@ -7,6 +7,7 @@ import com.registraai.registro_coristas_api.endereco.service.EnderecoService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,6 +27,7 @@ public class EnderecoController {
 
     private final EnderecoService enderecoService;
 
+    @PreAuthorize("hasAuthority('PESSOA_ATUALIZAR')")
     @PostMapping
     public ResponseEntity<EnderecoResponse> criar(@Valid @RequestBody EnderecoRequest request) {
         Endereco endereco = enderecoService.criar(request);
@@ -36,11 +38,13 @@ public class EnderecoController {
         return ResponseEntity.created(location).body(EnderecoResponse.de(endereco));
     }
 
+    @PreAuthorize("hasAuthority('PESSOA_LER') or @contatoDoProprio.ehMeuEndereco(#id)")
     @GetMapping("/{id}")
     public EnderecoResponse buscarPorId(@PathVariable UUID id) {
         return EnderecoResponse.de(enderecoService.buscarPorId(id));
     }
 
+    @PreAuthorize("hasAuthority('PESSOA_ATUALIZAR') or @contatoDoProprio.ehMeuEndereco(#id)")
     @PutMapping("/{id}")
     public EnderecoResponse atualizar(@PathVariable UUID id, @Valid @RequestBody EnderecoRequest request) {
         return EnderecoResponse.de(enderecoService.atualizar(id, request));

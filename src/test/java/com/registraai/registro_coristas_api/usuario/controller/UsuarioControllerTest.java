@@ -1,5 +1,8 @@
 package com.registraai.registro_coristas_api.usuario.controller;
 
+import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
+import com.registraai.registro_coristas_api.suporte.SegurancaTesteConfig;
+import org.springframework.context.annotation.Import;
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
 import com.registraai.registro_coristas_api.pessoa.model.StatusPessoa;
 import com.registraai.registro_coristas_api.role.exception.RoleInativaException;
@@ -42,6 +45,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(UsuarioController.class)
+@Import(SegurancaTesteConfig.class)
+@WithUsuarioTeste
 class UsuarioControllerTest {
 
     private static final UUID PESSOA_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
@@ -51,7 +56,7 @@ class UsuarioControllerTest {
             {
               "pessoaId": "22222222-2222-2222-2222-222222222222",
               "email": "maria@exemplo.com",
-              "senha": "senhaForte123",
+              "senha": "SenhaForte@123",
               "roleIds": ["33333333-3333-3333-3333-333333333333"]
             }
             """;
@@ -103,7 +108,7 @@ class UsuarioControllerTest {
     void criar_emailInvalido_retorna400() throws Exception {
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON).content("""
                         { "pessoaId": "22222222-2222-2222-2222-222222222222", "email": "nao-e-email",
-                          "senha": "senhaForte123", "roleIds": ["33333333-3333-3333-3333-333333333333"] }
+                          "senha": "SenhaForte@123", "roleIds": ["33333333-3333-3333-3333-333333333333"] }
                         """))
                 .andExpect(status().isBadRequest());
 
@@ -125,7 +130,7 @@ class UsuarioControllerTest {
     void criar_roleIdsVazio_retorna400() throws Exception {
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON).content("""
                         { "pessoaId": "22222222-2222-2222-2222-222222222222", "email": "a@a.com",
-                          "senha": "senhaForte123", "roleIds": [] }
+                          "senha": "SenhaForte@123", "roleIds": [] }
                         """))
                 .andExpect(status().isBadRequest());
 
@@ -136,7 +141,7 @@ class UsuarioControllerTest {
     void criar_roleIdsComElementoNulo_retorna400ENaoChamaService() throws Exception {
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON).content("""
                         { "pessoaId": "22222222-2222-2222-2222-222222222222", "email": "a@a.com",
-                          "senha": "senhaForte123", "roleIds": ["33333333-3333-3333-3333-333333333333", null] }
+                          "senha": "SenhaForte@123", "roleIds": ["33333333-3333-3333-3333-333333333333", null] }
                         """))
                 .andExpect(status().isBadRequest());
 

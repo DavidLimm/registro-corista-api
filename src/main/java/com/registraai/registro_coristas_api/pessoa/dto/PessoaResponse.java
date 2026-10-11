@@ -13,6 +13,7 @@ import java.util.UUID;
 public record PessoaResponse(
         UUID id,
         String nome,
+        String nomeExibicao,
         LocalDate dataNascimento,
         int idade,
         FaixaEtaria faixaEtaria,
@@ -35,6 +36,7 @@ public record PessoaResponse(
         return new PessoaResponse(
                 pessoa.getId(),
                 pessoa.getNome(),
+                nomeExibicao(pessoa, hoje),
                 pessoa.getDataNascimento(),
                 pessoa.idade(hoje),
                 pessoa.faixaEtaria(hoje),
@@ -51,5 +53,13 @@ public record PessoaResponse(
                 pessoa.getCriadoEm(),
                 pessoa.getAtualizadoEm()
         );
+    }
+
+    /** Menor aparece com o responsável ao lado: {@code Pedro Campos (responsável: Maria Oliveira)}. */
+    private static String nomeExibicao(Pessoa pessoa, LocalDate hoje) {
+        if (pessoa.menorDeIdade(hoje) && pessoa.getResponsavelLegalNome() != null) {
+            return pessoa.getNome() + " (responsável: " + pessoa.getResponsavelLegalNome() + ")";
+        }
+        return pessoa.getNome();
     }
 }

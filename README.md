@@ -17,7 +17,7 @@ A IEAD-PE tem 74 áreas (matriz = Área 1), cada uma com N congregações. O MVP
 - **Lombok**
 - **JUnit 5 + Mockito** (testes de service) e **Testcontainers PostgreSQL** (testes de integração)
 
-> Autenticação/autorização (Spring Security + JWT) ainda **não** foi implementada — ver [Roadmap](#roadmap).
+> Autenticação (JWT) e autorização por permissão estão implementadas — ver [Segurança](#segurança).
 
 ## Arquitetura
 
@@ -57,13 +57,34 @@ Corista (adolescente/jovem):   Usuario → Pessoa → Corista
 
 ### Workflow de cadastro
 
-`PENDENTE` (self-service) → aprovação por `PRESBITERO` (ou papel superior) → `APROVADO`. Remoção é sempre
-**soft delete** (status `INATIVO`), nunca `DELETE` físico.
+Todo mundo se auto-cadastra pelo formulário público (`POST /coristas`, com e-mail e senha) e nasce `PENDENTE`. A liderança do recorte
+aprova (`APROVADO`) ou reprova (`REPROVADO`): adolescentes — `DIRIGENTE_UNIAO` e líderes; jovens — `LIDERANCA_GRUPO_JOVEM`,
+`DIRIGENTE_CAMPANHA` e líderes (o `LIDER_MOCIDADE` aprova os dois). O login só funciona depois de `APROVADO`.
+`APROVADO` pode virar `AFASTADO` (sem acesso) e voltar: quem só pode solicitar pede, `LIDER_MOCIDADE` e `PASTOR` decidem.
+Remoção é sempre **soft delete** (status `INATIVO`), nunca `DELETE` físico. Quem vira líder deixa de ser corista: o cadastro de
+corista é desligado (não apagado).
 
 ### LGPD
 
 Cadastro de menores exige responsável legal (nome + telefone), consentimento explícito e trilha de
 aprovação/alteração.
+
+## Segurança
+
+Autenticação **JWT** (stateless) e autorização por **permissão**, sempre no backend.
+
+- **Login:** `POST /v1/api/auth/login` → `{token, email, roles}`. Enviar `Authorization: Bearer <token>` nas demais chamadas.
+  Só entra quem tem cadastro `APROVADO` (pendente, reprovado, afastado e inativo recebem 403 com o motivo, depois de a senha conferir).
+- **Senha:** mínimo 8 caracteres com maiúscula, minúscula, número e caractere especial. Três senhas erradas seguidas bloqueiam a
+  conta (423) até redefinir. Redefinir: `POST /auth/redefinicao-senha/solicitar` (responde 202 sempre) e `.../confirmar`; trocar
+  estando logado: `PUT /auth/senha`. Trocar ou redefinir derruba os tokens antigos.
+- **Permissões:** cada endpoint exige uma permissão (ex.: `CORISTA_APROVAR`) concedida aos papéis no banco (`role_permissao`); o PASTOR as edita
+  em `PUT /roles/{id}/permissoes` sem deploy.
+- **Recorte:** apoio, maestros e líderes só veem a lista (adolescentes ou jovens) do seu papel; o presbítero só a sua congregação; o
+  corista só o próprio cadastro. Fora do recorte a resposta é 404.
+- **Público (sem login):** login, redefinição de senha, `POST /coristas` (auto-cadastro) e `GET /congregacoes`.
+- **Em produção:** `JWT_SEGREDO` é obrigatório (Base64, mínimo 32 bytes; gere com `openssl rand -base64 64`) e **nunca** vai para o Git.
+  O envio de e-mail da redefinição de senha ainda não tem provedor configurado.
 
 ## Endpoints (v1)
 
@@ -74,14 +95,15 @@ Prefixo comum: `/v1/api`.
 | **Área** | `POST /areas` · `GET /areas` · `GET /areas/{id}` · `PUT /areas/{id}` · `DELETE /areas/{id}` (soft) · `PATCH /areas/{id}/reativar` |
 | **Congregação** | `POST /congregacoes` · `GET /congregacoes` · `GET /congregacoes/{id}` · `PUT /congregacoes/{id}` · `DELETE /congregacoes/{id}` (soft) · `PATCH /congregacoes/{id}/reativar` |
 | **Pessoa** | `POST /pessoas` · `GET /pessoas` (paginado, filtros: nome, areaId, congregacaoId, faixaEtaria, status) · `GET /pessoas/{id}` · `PUT /pessoas/{id}` · `DELETE /pessoas/{id}` (soft → `INATIVO`) · `PATCH /pessoas/{id}/aprovar` · `PATCH /pessoas/{id}/reprovar` |
-| **Corista** | `POST /coristas` (aceita `usuario` opcional: cria login junto, papel derivado da lista de classificação) · `GET /coristas` (paginado, filtros: nome, areaId, congregacaoId, listaClassificacao, status) · `GET /coristas/{id}` · `PUT /coristas/{id}` · `DELETE /coristas/{id}` (soft → `INATIVO`) · `PATCH /coristas/{id}/aprovar` · `PATCH /coristas/{id}/reprovar` |
+| **Corista** | `POST /coristas` (aceita `usuario` opcional: cria login junto, papel derivado da lista de classificação) · `GET /coristas` (paginado, filtros: nome, areaId, congregacaoId, listaClassificacao, status) · `GET /coristas/{id}` · `PUT /coristas/{id}` · `DELETE /coristas/{id}` (soft → `INATIVO`) · `GET /coristas/meu` (o próprio cadastro) · `PATCH /coristas/{id}/aprovar` · `/reprovar` · `/promover` · `/afastar` · `/retornar-do-afastamento` · `/voz` (só o tipo de voz, para o maestro) · `POST /coristas/{id}/solicitar-afastamento` |
 | **Endereço** | `POST /enderecos` · `GET /enderecos/{id}` · `PUT /enderecos/{id}` |
 | **Telefone** | `POST /pessoas/{pessoaId}/telefones` · `GET /pessoas/{pessoaId}/telefones` · `GET .../telefones/{id}` · `PUT .../telefones/{id}` · `DELETE .../telefones/{id}` |
-| **Role** | `POST /roles` · `GET /roles` · `GET /roles/{id}` · `PUT /roles/{id}` · `DELETE /roles/{id}` (soft) · `PATCH /roles/{id}/reativar` |
+| **Role** | `POST /roles` · `POST /roles/solicitacoes` (pede um papel novo, nasce `PENDENTE`) · `GET /roles` (filtros: ativo, status) · `GET /roles/{id}` · `PUT /roles/{id}` · `DELETE /roles/{id}` (soft) · `PATCH /roles/{id}/reativar` · `/aprovar` · `/reprovar` · `GET`/`PUT /roles/{id}/permissoes` |
+| **Solicitação de afastamento** | `GET /solicitacoes-afastamento` (fila, filtro: status) · `PATCH /solicitacoes-afastamento/{id}/aprovar` · `/negar` |
+| **Autenticação** | `POST /auth/login` · `PUT /auth/senha` · `POST /auth/redefinicao-senha/solicitar` · `POST /auth/redefinicao-senha/confirmar` |
 | **Usuário** (`Usuario`) | `POST /usuarios` · `GET /usuarios` (paginado, filtro: ativo) · `GET /usuarios/{id}` · `PUT /usuarios/{id}` · `DELETE /usuarios/{id}` (soft) · `PATCH /usuarios/{id}/reativar` — senha gravada como hash (BCrypt); não exige pessoa `APROVADO` (auto-cadastro cria pessoa + usuário juntos, ainda `PENDENTE`) |
 
-`aprovar`/`reprovar` recebem `aprovadoPor`/`reprovadoPor` (UUID) como query param — ainda sem checagem de quem
-está chamando (depende da autenticação, que não existe: ver [Roadmap](#roadmap)).
+`aprovar`, `reprovar`, `afastar`, `retornar-do-afastamento` e `promover` registram o **usuário logado** como autor (não há mais parâmetro `...Por`).
 
 Documentação interativa (Swagger UI) disponível em `/swagger-ui.html` no perfil `dev` (desabilitada em `prod`).
 
@@ -158,7 +180,10 @@ docker compose --profile app up --build
   adiantou prematuramente (a promoção continua sem endpoint; a FK exigia um `usuario` real, e os testes usam UUID
   fictício pra simular quem aprovou) · `V13` novos roles de aprovação (`DIRIGENTE_UNIAO`, `LIDERANCA_GRUPO_JOVEM`,
   `DIRIGENTE_CAMPANHA`) e descrição do `PRESBITERO` · `V14` status `REPROVADO` em pessoa · `V15` renomeia
-  `app_user` → `usuario` e `app_user_role` → `usuario_role`.
+  `app_user` → `usuario` e `app_user_role` → `usuario_role` · `V16` status `AFASTADO` · `V17`/`V18` permissões (`permissao`,
+  `role_permissao`) · `V19`/`V20` trilha e histórico de status · `V21`/`V22` corista só vê o próprio cadastro e corrigir
+  nascimento · `V23` bloqueio de login e redefinição de senha · `V24` edição de contato · `V25` desligamento de corista ·
+  `V26` solicitação de papel · `V27` solicitação de afastamento.
 
 ## Variáveis de ambiente
 
@@ -170,20 +195,19 @@ docker compose --profile app up --build
 | `DB_USER` | Usuário do banco | `postgres` |
 | `DB_PASSWORD` | Senha do banco | `postgres` |
 | `SPRING_PROFILES_ACTIVE` | Perfil ativo (`prod` em produção) | — |
+| `JWT_SEGREDO` | Chave do JWT em Base64 (mín. 32 bytes). **Obrigatória em prod** | chave pública de dev (nunca usar em prod) |
+| `JWT_EXPIRACAO_MINUTOS` | Validade do token | `60` |
 
 Nunca commitar segredos. Em dev, use `.env` (ignorado no Git); em produção (Render), todas as variáveis
 vêm da plataforma.
 
 ## Roadmap
 
-- **Autenticação/autorização** (Spring Security + JWT): ainda não implementada. Papéis (`role`) e usuários
-  (`usuario`, vinculado 1:1 a `Pessoa` e N:N a `Role`) já modelados no schema (`V7`/`V10`/`V11`/`V13`) e com CRUD
-  próprio; auto-cadastro já cria pessoa/corista + login juntos e os endpoints de aprovar/reprovar já existem —
-  falta login (JWT), o filtro que identifica o usuário autenticado na requisição, e a checagem de que quem chama
-  `aprovar`/`reprovar` tem mesmo o papel certo (hoje `aprovadoPor`/`reprovadoPor` é só um parâmetro cru). RBAC vai
-  validar **role** + **vínculo geográfico** (área/congregação) sempre no backend. Regra decidida: `ADMIN` acesso
-  global · `PASTOR` até 2 áreas · demais papéis, exatamente 1 área — via tabela de junção `usuario_area` (não coluna
-  única em `Usuario`).
+- **Hierarquia organizacional** (próximo): `Agrupamento` (campo missionário, filial, setor ou área) → `Subdivisão` → `Congregação`,
+  e escopo do usuário por **agrupamento** (`usuario_agrupamento`): `ADMIN` global · `PASTOR` até 2 (exceto campo missionário, onde fica
+  só nele) · demais papéis, exatamente 1. Decisão registrada no `AGENTS.md`.
+- **Segurança — pendências:** envio real de e-mail para a redefinição de senha, limite de tentativas no cadastro público,
+  CORS e botão de Bearer no Swagger.
 - Módulo de **eventos**: adiado para outra versão (fora do escopo do MVP por ora).
 - Observabilidade: Actuator (health/readiness/liveness), Micrometer + Prometheus, Micrometer Tracing/OpenTelemetry,
   logs estruturados em JSON.

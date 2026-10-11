@@ -12,8 +12,10 @@ import com.registraai.registro_coristas_api.pessoa.exception.PessoaNaoEncontrada
 import com.registraai.registro_coristas_api.pessoa.exception.ResponsavelLegalIncompletoException;
 import com.registraai.registro_coristas_api.pessoa.exception.ResponsavelLegalObrigatorioException;
 import com.registraai.registro_coristas_api.pessoa.exception.TransicaoDeStatusInvalidaException;
+import com.registraai.registro_coristas_api.pessoa.model.HistoricoStatusPessoa;
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
 import com.registraai.registro_coristas_api.pessoa.model.StatusPessoa;
+import com.registraai.registro_coristas_api.pessoa.repository.HistoricoStatusPessoaRepository;
 import com.registraai.registro_coristas_api.pessoa.repository.PessoaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -37,6 +39,7 @@ import java.util.UUID;
 public class PessoaService {
 
     private final PessoaRepository pessoaRepository;
+    private final HistoricoStatusPessoaRepository historicoStatusPessoaRepository;
     private final CongregacaoService congregacaoService;
     private final EnderecoService enderecoService;
     private final Clock clock;
@@ -117,6 +120,7 @@ public class PessoaService {
         if (pessoa.getStatus() != StatusPessoa.PENDENTE) {
             throw new TransicaoDeStatusInvalidaException(pessoa.getStatus(), StatusPessoa.APROVADO);
         }
+        registrarTransicao(pessoa, StatusPessoa.APROVADO, aprovadoPor);
         pessoa.setStatus(StatusPessoa.APROVADO);
         pessoa.setAprovadoPor(aprovadoPor);
         pessoa.setAprovadoEm(Instant.now(clock));
@@ -133,18 +137,69 @@ public class PessoaService {
         if (pessoa.getStatus() != StatusPessoa.PENDENTE) {
             throw new TransicaoDeStatusInvalidaException(pessoa.getStatus(), StatusPessoa.REPROVADO);
         }
+        registrarTransicao(pessoa, StatusPessoa.REPROVADO, reprovadoPor);
         pessoa.setStatus(StatusPessoa.REPROVADO);
         pessoa.setReprovadoPor(reprovadoPor);
         pessoa.setReprovadoEm(Instant.now(clock));
         return pessoaRepository.save(pessoa);
     }
 
-    /** Soft delete ({@code INATIVO}), nunca DELETE físico. Idempotente. */
+    /**
+     * {@code APROVADO -> AFASTADO}, registrando quem afastou. Só vale a partir de {@code APROVADO}. Quem chama
+     * ({@code afastadoPor}) deve ser LIDER_MOCIDADE ou PASTOR (permissão {@code CORISTA_APROVAR_AFASTAMENTO}), mas
+     * isso ainda não é validado: depende da autenticação (ver AGENTS.md).
+     */
+    @Transactional
+    public Pessoa afastar(UUID id, UUID afastadoPor) {
+        Pessoa pessoa = buscarPorId(id);
+        if (pessoa.getStatus() != StatusPessoa.APROVADO) {
+            throw new TransicaoDeStatusInvalidaException(pessoa.getStatus(), StatusPessoa.AFASTADO);
+        }
+        registrarTransicao(pessoa, StatusPessoa.AFASTADO, afastadoPor);
+        pessoa.setStatus(StatusPessoa.AFASTADO);
+        pessoa.setAfastadoPor(afastadoPor);
+        pessoa.setAfastadoEm(Instant.now(clock));
+        return pessoaRepository.save(pessoa);
+    }
+
+    /**
+     * {@code AFASTADO -> APROVADO}. Limpa a trilha do afastamento, porque a constraint do banco só admite trilha
+     * enquanto o status for AFASTADO. O histórico completo de afastamentos fica para uma tabela de auditoria, ainda
+     * não criada. Mesma ressalva de autorização de {@link #afastar}.
+     */
+    @Transactional
+    public Pessoa retornarDoAfastamento(UUID id, UUID retornadoPor) {
+        Pessoa pessoa = buscarPorId(id);
+        if (pessoa.getStatus() != StatusPessoa.AFASTADO) {
+            throw new TransicaoDeStatusInvalidaException(pessoa.getStatus(), StatusPessoa.APROVADO);
+        }
+        registrarTransicao(pessoa, StatusPessoa.APROVADO, retornadoPor);
+        pessoa.setStatus(StatusPessoa.APROVADO);
+        pessoa.setAfastadoPor(null);
+        pessoa.setAfastadoEm(null);
+        return pessoaRepository.save(pessoa);
+    }
+
+    /** Soft delete ({@code INATIVO}), nunca DELETE físico. Idempotente: inativar de novo não gera nova transição. */
     @Transactional
     public void inativar(UUID id) {
         Pessoa pessoa = buscarPorId(id);
+        if (pessoa.getStatus() == StatusPessoa.INATIVO) {
+            return;
+        }
+        registrarTransicao(pessoa, StatusPessoa.INATIVO, null);
         pessoa.setStatus(StatusPessoa.INATIVO);
         pessoaRepository.save(pessoa);
+    }
+
+    /** Grava uma linha no histórico com o status atual como anterior. Chamar antes de mudar o status. */
+    private void registrarTransicao(Pessoa pessoa, StatusPessoa novo, UUID realizadoPor) {
+        historicoStatusPessoaRepository.save(HistoricoStatusPessoa.builder()
+                .pessoa(pessoa)
+                .statusAnterior(pessoa.getStatus())
+                .statusNovo(novo)
+                .realizadoPor(realizadoPor)
+                .build());
     }
 
     private Congregacao buscarCongregacaoAtiva(UUID congregacaoId) {

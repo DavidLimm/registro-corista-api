@@ -1,5 +1,8 @@
 package com.registraai.registro_coristas_api.congregacao.controller;
 
+import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
+import com.registraai.registro_coristas_api.suporte.SegurancaTesteConfig;
+import org.springframework.context.annotation.Import;
 import com.registraai.registro_coristas_api.area.exception.AreaInativaException;
 import com.registraai.registro_coristas_api.area.exception.AreaNaoEncontradaException;
 import com.registraai.registro_coristas_api.area.model.Area;
@@ -36,6 +39,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(CongregacaoController.class)
+@Import(SegurancaTesteConfig.class)
+@WithUsuarioTeste
 class CongregacaoControllerTest {
 
     private static final UUID AREA_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");

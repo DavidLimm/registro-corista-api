@@ -7,6 +7,7 @@ import com.registraai.registro_coristas_api.telefone.service.TelefoneService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,6 +30,7 @@ public class TelefoneController {
 
     private final TelefoneService telefoneService;
 
+    @PreAuthorize("hasAuthority('PESSOA_ATUALIZAR') or @contatoDoProprio.ehMinhaPessoa(#pessoaId)")
     @PostMapping
     public ResponseEntity<TelefoneResponse> criar(@PathVariable UUID pessoaId,
                                                   @Valid @RequestBody TelefoneRequest request) {
@@ -41,16 +43,19 @@ public class TelefoneController {
     }
 
     /** Sem paginação (poucos por pessoa). O principal vem primeiro. */
+    @PreAuthorize("hasAuthority('PESSOA_LER') or @contatoDoProprio.ehMinhaPessoa(#pessoaId)")
     @GetMapping
     public List<TelefoneResponse> listar(@PathVariable UUID pessoaId) {
         return telefoneService.listar(pessoaId).stream().map(TelefoneResponse::de).toList();
     }
 
+    @PreAuthorize("hasAuthority('PESSOA_LER') or @contatoDoProprio.ehMinhaPessoa(#pessoaId)")
     @GetMapping("/{id}")
     public TelefoneResponse buscarPorId(@PathVariable UUID pessoaId, @PathVariable UUID id) {
         return TelefoneResponse.de(telefoneService.buscarPorId(pessoaId, id));
     }
 
+    @PreAuthorize("hasAuthority('PESSOA_ATUALIZAR') or @contatoDoProprio.ehMinhaPessoa(#pessoaId)")
     @PutMapping("/{id}")
     public TelefoneResponse atualizar(@PathVariable UUID pessoaId, @PathVariable UUID id,
                                       @Valid @RequestBody TelefoneRequest request) {
@@ -58,6 +63,7 @@ public class TelefoneController {
     }
 
     /** Remove o registro (telefone não tem status). Se era o principal, o mais antigo restante assume. */
+    @PreAuthorize("hasAuthority('PESSOA_ATUALIZAR') or @contatoDoProprio.ehMinhaPessoa(#pessoaId)")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> remover(@PathVariable UUID pessoaId, @PathVariable UUID id) {
         telefoneService.remover(pessoaId, id);

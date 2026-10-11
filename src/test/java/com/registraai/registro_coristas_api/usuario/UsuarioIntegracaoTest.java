@@ -1,5 +1,6 @@
 package com.registraai.registro_coristas_api.usuario;
 
+import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
 import com.registraai.registro_coristas_api.pessoa.service.PessoaService;
 import com.registraai.registro_coristas_api.role.repository.RoleRepository;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
+@WithUsuarioTeste
 class UsuarioIntegracaoTest {
 
     @Container
@@ -102,7 +104,7 @@ class UsuarioIntegracaoTest {
         UUID roleId = idDaRole("CORISTA_JOVENS");
 
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(pessoaId, "maria@exemplo.com", "senhaForte123", "[\"" + roleId + "\"]")))
+                        .content(corpo(pessoaId, "maria@exemplo.com", "SenhaForte@123", "[\"" + roleId + "\"]")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.pessoaId").value(pessoaId))
                 .andExpect(jsonPath("$.pessoaNome").value("Maria da Silva"))
@@ -120,7 +122,7 @@ class UsuarioIntegracaoTest {
         UUID roleId = idDaRole("CORISTA_JOVENS");
 
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(pessoaId, "Bia@Exemplo.COM", "senhaForte123", "[\"" + roleId + "\"]")))
+                        .content(corpo(pessoaId, "Bia@Exemplo.COM", "SenhaForte@123", "[\"" + roleId + "\"]")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.email").value("bia@exemplo.com"));
     }
@@ -137,7 +139,7 @@ class UsuarioIntegracaoTest {
         String pessoaId = idDoLocation(location); // sem aprovar
 
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(pessoaId, "caio@exemplo.com", "senhaForte123", "[\"" + idDaRole("CORISTA_JOVENS") + "\"]")))
+                        .content(corpo(pessoaId, "caio@exemplo.com", "SenhaForte@123", "[\"" + idDaRole("CORISTA_JOVENS") + "\"]")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.email").value("caio@exemplo.com"));
     }
@@ -148,11 +150,11 @@ class UsuarioIntegracaoTest {
         String pessoaId = criarPessoaAprovada(congregacaoId, "Duda");
         UUID roleId = idDaRole("CORISTA_JOVENS");
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(pessoaId, "duda1@exemplo.com", "senhaForte123", "[\"" + roleId + "\"]")))
+                        .content(corpo(pessoaId, "duda1@exemplo.com", "SenhaForte@123", "[\"" + roleId + "\"]")))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(pessoaId, "duda2@exemplo.com", "senhaForte123", "[\"" + roleId + "\"]")))
+                        .content(corpo(pessoaId, "duda2@exemplo.com", "SenhaForte@123", "[\"" + roleId + "\"]")))
                 .andExpect(status().isConflict());
     }
 
@@ -163,11 +165,11 @@ class UsuarioIntegracaoTest {
         String pessoa1 = criarPessoaAprovada(congregacaoId, "Elis");
         String pessoa2 = criarPessoaAprovada(congregacaoId, "Fabi");
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(pessoa1, "mesmo@exemplo.com", "senhaForte123", "[\"" + roleId + "\"]")))
+                        .content(corpo(pessoa1, "mesmo@exemplo.com", "SenhaForte@123", "[\"" + roleId + "\"]")))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(pessoa2, "mesmo@exemplo.com", "senhaForte123", "[\"" + roleId + "\"]")))
+                        .content(corpo(pessoa2, "mesmo@exemplo.com", "SenhaForte@123", "[\"" + roleId + "\"]")))
                 .andExpect(status().isConflict());
     }
 
@@ -177,7 +179,7 @@ class UsuarioIntegracaoTest {
         String pessoaId = criarPessoaAprovada(congregacaoId, "Gabi");
 
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(pessoaId, "gabi@exemplo.com", "senhaForte123",
+                        .content(corpo(pessoaId, "gabi@exemplo.com", "SenhaForte@123",
                                 "[\"00000000-0000-0000-0000-000000000000\"]")))
                 .andExpect(status().isNotFound());
 
@@ -185,7 +187,7 @@ class UsuarioIntegracaoTest {
         mockMvc.perform(delete("/v1/api/roles/" + roleId)).andExpect(status().isNoContent());
 
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(pessoaId, "gabi2@exemplo.com", "senhaForte123", "[\"" + roleId + "\"]")))
+                        .content(corpo(pessoaId, "gabi2@exemplo.com", "SenhaForte@123", "[\"" + roleId + "\"]")))
                 .andExpect(status().isConflict());
 
         mockMvc.perform(patch("/v1/api/roles/" + roleId + "/reativar")).andExpect(status().isOk());
@@ -197,7 +199,7 @@ class UsuarioIntegracaoTest {
         String pessoaId = criarPessoaAprovada(congregacaoId, "Helo");
 
         mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(pessoaId, "helo@exemplo.com", "senhaForte123",
+                        .content(corpo(pessoaId, "helo@exemplo.com", "SenhaForte@123",
                                 "[\"" + idDaRole("CORISTA_JOVENS") + "\", null]")))
                 .andExpect(status().isBadRequest());
     }
@@ -211,12 +213,12 @@ class UsuarioIntegracaoTest {
         UUID corista = idDaRole("CORISTA_JOVENS");
         UUID maestro = idDaRole("MAESTRO_JOVENS");
         String location = mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(pessoaId, "ivo@exemplo.com", "senhaForte123", "[\"" + corista + "\"]")))
+                        .content(corpo(pessoaId, "ivo@exemplo.com", "SenhaForte@123", "[\"" + corista + "\"]")))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getHeader("Location");
 
         mockMvc.perform(put(location).contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(pessoaId, "ivo.novo@exemplo.com", "outraSenha123", "[\"" + maestro + "\"]")))
+                        .content(corpo(pessoaId, "ivo.novo@exemplo.com", "OutraSenha@456", "[\"" + maestro + "\"]")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("ivo.novo@exemplo.com"))
                 .andExpect(jsonPath("$.roles[0]").value("MAESTRO_JOVENS"));
@@ -229,12 +231,12 @@ class UsuarioIntegracaoTest {
         String outraPessoaId = criarPessoaAprovada(congregacaoId, "Karla");
         UUID roleId = idDaRole("CORISTA_JOVENS");
         String location = mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(pessoaId, "julia@exemplo.com", "senhaForte123", "[\"" + roleId + "\"]")))
+                        .content(corpo(pessoaId, "julia@exemplo.com", "SenhaForte@123", "[\"" + roleId + "\"]")))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getHeader("Location");
 
         mockMvc.perform(put(location).contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(outraPessoaId, "julia@exemplo.com", "senhaForte123", "[\"" + roleId + "\"]")))
+                        .content(corpo(outraPessoaId, "julia@exemplo.com", "SenhaForte@123", "[\"" + roleId + "\"]")))
                 .andExpect(status().isConflict());
     }
 
@@ -246,7 +248,7 @@ class UsuarioIntegracaoTest {
         String pessoaId = criarPessoaAprovada(congregacaoId, "Léo");
         UUID roleId = idDaRole("CORISTA_JOVENS");
         String location = mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(pessoaId, "leo@exemplo.com", "senhaForte123", "[\"" + roleId + "\"]")))
+                        .content(corpo(pessoaId, "leo@exemplo.com", "SenhaForte@123", "[\"" + roleId + "\"]")))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getHeader("Location");
 
@@ -265,12 +267,12 @@ class UsuarioIntegracaoTest {
         UUID roleId = idDaRole("CORISTA_JOVENS");
         String ativoLocation = mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON)
                         .content(corpo(criarPessoaAprovada(congregacaoId, "Marco"), "marco@exemplo.com",
-                                "senhaForte123", "[\"" + roleId + "\"]")))
+                                "SenhaForte@123", "[\"" + roleId + "\"]")))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getHeader("Location");
         String inativoLocation = mockMvc.perform(post("/v1/api/usuarios").contentType(MediaType.APPLICATION_JSON)
                         .content(corpo(criarPessoaAprovada(congregacaoId, "Nina"), "nina@exemplo.com",
-                                "senhaForte123", "[\"" + roleId + "\"]")))
+                                "SenhaForte@123", "[\"" + roleId + "\"]")))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getHeader("Location");
         mockMvc.perform(delete(inativoLocation)).andExpect(status().isNoContent());

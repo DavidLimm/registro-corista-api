@@ -1,6 +1,7 @@
 package com.registraai.registro_coristas_api.usuario.model;
 
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
+import com.registraai.registro_coristas_api.pessoa.model.StatusPessoa;
 import com.registraai.registro_coristas_api.role.model.Role;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -20,8 +21,12 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -38,7 +43,7 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Usuario {
+public class Usuario implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -59,6 +64,19 @@ public class Usuario {
     @Column(nullable = false)
     private boolean ativo = true;
 
+    /** Senhas erradas seguidas desde o último acerto (ver {@code ControleDeLogin}). */
+    @Builder.Default
+    @Column(name = "tentativas_falhas", nullable = false)
+    private int tentativasFalhas = 0;
+
+    /** Preenchido quando a conta é bloqueada por tentativas; só a redefinição de senha limpa. */
+    @Column(name = "bloqueado_em")
+    private Instant bloqueadoEm;
+
+    /** JWT emitidos antes disto não valem mais (troca ou redefinição de senha). */
+    @Column(name = "senha_alterada_em")
+    private Instant senhaAlteradaEm;
+
     @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
@@ -75,4 +93,39 @@ public class Usuario {
     @UpdateTimestamp
     @Column(name = "atualizado_em", nullable = false)
     private Instant atualizadoEm;
+
+    /**
+     * Um {@code ROLE_<nome>} por papel e uma autoridade por permissão concedida a eles (ex.: {@code CORISTA_APROVAR}).
+     * As permissões vêm do banco ({@code role_permissao}), então o PASTOR as altera sem deploy; o código checa
+     * a permissão ({@code hasAuthority}), não o nome do papel.
+     */
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        Set<GrantedAuthority> autoridades = new HashSet<>();
+        for (Role role : roles) {
+            autoridades.add(new SimpleGrantedAuthority("ROLE_" + role.getNome()));
+            role.getPermissoes().forEach(permissao -> autoridades.add(new SimpleGrantedAuthority(permissao.getNome())));
+        }
+        return autoridades;
+    }
+
+    @Override
+    public String getPassword() {
+        return senhaHash;
+    }
+
+    @Override
+    public String getUsername() {
+        return email;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return bloqueadoEm == null;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return ativo && pessoa.getStatus() == StatusPessoa.APROVADO;
+    }
 }

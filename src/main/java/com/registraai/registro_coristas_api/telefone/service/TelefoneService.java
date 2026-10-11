@@ -1,6 +1,7 @@
 package com.registraai.registro_coristas_api.telefone.service;
 
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
+import com.registraai.registro_coristas_api.pessoa.service.LimiteDeEdicaoDeContato;
 import com.registraai.registro_coristas_api.pessoa.service.PessoaService;
 import com.registraai.registro_coristas_api.telefone.dto.TelefoneRequest;
 import com.registraai.registro_coristas_api.telefone.exception.TelefoneDuplicadoException;
@@ -24,6 +25,7 @@ public class TelefoneService {
 
     private final TelefoneRepository telefoneRepository;
     private final PessoaService pessoaService;
+    private final LimiteDeEdicaoDeContato limiteDeEdicaoDeContato;
 
     /** O primeiro telefone da pessoa é sempre o principal; nos demais, só se {@code principal = true}. */
     @Transactional
@@ -33,6 +35,7 @@ public class TelefoneService {
         if (telefoneRepository.existsByPessoaIdAndNumero(pessoaId, numero)) {
             throw new TelefoneDuplicadoException(numero);
         }
+        limiteDeEdicaoDeContato.registrarEdicaoDeTelefone(pessoa);
 
         boolean principal = Boolean.TRUE.equals(request.principal()) || !telefoneRepository.existsByPessoaId(pessoaId);
         if (principal) {
@@ -68,6 +71,7 @@ public class TelefoneService {
         if (telefoneRepository.existsByPessoaIdAndNumeroAndIdNot(pessoaId, numero, id)) {
             throw new TelefoneDuplicadoException(numero);
         }
+        limiteDeEdicaoDeContato.registrarEdicaoDeTelefone(telefone.getPessoa());
 
         telefone.setNumero(numero);
         telefone.setWhatsapp(Boolean.TRUE.equals(request.whatsapp()));
@@ -85,6 +89,7 @@ public class TelefoneService {
     @Transactional
     public void remover(UUID pessoaId, UUID id) {
         Telefone telefone = buscarPorId(pessoaId, id);
+        limiteDeEdicaoDeContato.registrarEdicaoDeTelefone(telefone.getPessoa());
         boolean eraPrincipal = telefone.isPrincipal();
         telefoneRepository.delete(telefone);
         telefoneRepository.flush();

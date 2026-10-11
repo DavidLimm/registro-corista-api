@@ -1,26 +1,34 @@
 package com.registraai.registro_coristas_api.corista.service;
 
+import com.registraai.registro_coristas_api.autenticacao.service.UsuarioLogado;
 import com.registraai.registro_coristas_api.corista.dto.CoristaFiltro;
 import com.registraai.registro_coristas_api.corista.dto.CoristaRequest;
+import com.registraai.registro_coristas_api.corista.exception.CorrecaoDeNascimentoNegadaException;
 import com.registraai.registro_coristas_api.corista.exception.CoristaNaoEncontradoException;
 import com.registraai.registro_coristas_api.corista.exception.PromocaoInvalidaException;
 import com.registraai.registro_coristas_api.corista.model.Corista;
 import com.registraai.registro_coristas_api.corista.model.ListaClassificacao;
+import com.registraai.registro_coristas_api.corista.model.TipoVoz;
 import com.registraai.registro_coristas_api.corista.repository.CoristaRepository;
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
 import com.registraai.registro_coristas_api.pessoa.service.PessoaService;
+import com.registraai.registro_coristas_api.role.model.Permissao;
+import com.registraai.registro_coristas_api.usuario.model.Usuario;
 import com.registraai.registro_coristas_api.usuario.service.UsuarioService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -30,6 +38,7 @@ public class CoristaService {
     private final CoristaRepository coristaRepository;
     private final PessoaService pessoaService;
     private final UsuarioService usuarioService;
+    private final UsuarioLogado usuarioLogado;
     private final Clock clock;
 
     /**
@@ -53,16 +62,89 @@ public class CoristaService {
         return salvo;
     }
 
+    /**
+     * Só devolve quem o usuário logado pode acessar: o próprio cadastro ou alguém da lista do seu recorte. Fora disso
+     * responde "não encontrado" (404), para não revelar que o cadastro existe. Todas as operações abaixo passam por aqui.
+     */
     @Transactional(readOnly = true)
     public Corista buscarPorId(UUID id) {
-        return coristaRepository.findById(id)
+        Corista corista = coristaRepository.findById(id)
                 .orElseThrow(() -> new CoristaNaoEncontradoException(id));
+        if (corista.desligado() || !podeAcessar(corista)) {
+            throw new CoristaNaoEncontradoException(id);
+        }
+        return corista;
     }
 
-    /** Ordenada por nome (o cliente não escolhe a ordenação). */
+    private boolean podeAcessar(Corista corista) {
+        return usuarioLogado.atual()
+                .map(usuario -> ehOProprioCadastro(usuario, corista) || estaNoRecorte(usuario, corista))
+                .orElse(false);
+    }
+
+    // só vale para quem tem papel de corista: líder não é corista, então o cadastro antigo dele fica bloqueado
+    private boolean ehOProprioCadastro(Usuario usuario, Corista corista) {
+        return RecorteDeAcesso.ehCorista(usuario)
+                && usuario.getPessoa().getId().equals(corista.getPessoa().getId());
+    }
+
+    private boolean estaNoRecorte(Usuario usuario, Corista corista) {
+        boolean listaPermitida = RecorteDeAcesso.listasPermitidas(usuario).contains(corista.getListaClassificacao());
+        boolean congregacaoPermitida = RecorteDeAcesso.congregacaoRestrita(usuario)
+                .map(congregacaoId -> congregacaoId.equals(corista.getPessoa().getCongregacao().getId()))
+                .orElse(true);
+        return listaPermitida && congregacaoPermitida;
+    }
+
+    /** O corista da pessoa logada; 404 se quem está logado não é corista (ex.: um líder). */
+    @Transactional(readOnly = true)
+    public Corista buscarDoUsuarioLogado() {
+        UUID pessoaId = pessoaDoUsuarioLogado();
+        if (!usuarioLogado.atual().map(RecorteDeAcesso::ehCorista).orElse(false)) {
+            throw new CoristaNaoEncontradoException(pessoaId);
+        }
+        return coristaRepository.findByPessoaId(pessoaId)
+                .filter(corista -> !corista.desligado())
+                .orElseThrow(() -> new CoristaNaoEncontradoException(pessoaId));
+    }
+
+    /**
+     * O corista {@code id} é o do próprio usuário logado? Usado nas regras de {@code @PreAuthorize}: quem não tem
+     * permissão de leitura geral ({@code CORISTA_LER}, a liderança) só enxerga e edita o próprio cadastro.
+     */
+    @Transactional(readOnly = true)
+    public boolean ehProprio(UUID id) {
+        return usuarioLogado.atual()
+                .map(usuario -> RecorteDeAcesso.ehCorista(usuario)
+                        && coristaRepository.existsByIdAndPessoaIdAndDesligadoEmIsNull(id, usuario.getPessoa().getId()))
+                .orElse(false);
+    }
+
+    private UUID pessoaDoUsuarioLogado() {
+        return usuarioLogado.atual()
+                .map(usuario -> usuario.getPessoa().getId())
+                .orElseThrow(() -> new AuthenticationCredentialsNotFoundException("Nenhum usuário autenticado."));
+    }
+
+    /** Ordenada por nome (o cliente não escolhe a ordenação). Só traz as listas do recorte do usuário logado. */
     @Transactional(readOnly = true)
     public Page<Corista> listar(CoristaFiltro filtro, int pagina, int tamanho) {
-        Specification<Corista> especificacao = Specification.unrestricted();
+        PageRequest pageable = PageRequest.of(pagina, tamanho, Sort.by("pessoa.nome").and(Sort.by("id")));
+        Set<ListaClassificacao> permitidas = usuarioLogado.atual()
+                .map(RecorteDeAcesso::listasPermitidas)
+                .orElse(Set.of());
+        if (permitidas.isEmpty()) {
+            return Page.empty(pageable);
+        }
+        // desligado (ex.: virou líder) não aparece mais; só a lista do recorte do usuário
+        Specification<Corista> especificacao = (root, query, cb) -> cb.and(
+                cb.isNull(root.get("desligadoEm")), root.get("listaClassificacao").in(permitidas));
+        Optional<UUID> congregacaoRestrita = usuarioLogado.atual().flatMap(RecorteDeAcesso::congregacaoRestrita);
+        if (congregacaoRestrita.isPresent()) {
+            UUID congregacaoId = congregacaoRestrita.get();
+            especificacao = especificacao.and((root, query, cb) ->
+                    cb.equal(root.get("pessoa").get("congregacao").get("id"), congregacaoId));
+        }
         if (filtro.nome() != null && !filtro.nome().isBlank()) {
             String trecho = "%" + escaparLike(filtro.nome().trim().toLowerCase()) + "%";
             especificacao = especificacao.and((root, query, cb) ->
@@ -84,8 +166,7 @@ public class CoristaService {
             especificacao = especificacao.and((root, query, cb) ->
                     cb.equal(root.get("pessoa").get("status"), filtro.status()));
         }
-        // "id" desempata nomes iguais para a paginação ser estável
-        PageRequest pageable = PageRequest.of(pagina, tamanho, Sort.by("pessoa.nome").and(Sort.by("id")));
+        // "id" (na ordenação acima) desempata nomes iguais para a paginação ser estável
         return coristaRepository.findAll(especificacao, pageable);
     }
 
@@ -96,11 +177,23 @@ public class CoristaService {
     @Transactional
     public Corista atualizar(UUID id, CoristaRequest request) {
         Corista corista = buscarPorId(id);
+        if (!corista.getPessoa().getDataNascimento().equals(request.pessoa().dataNascimento())
+                && !usuarioLogado.temPermissao(Permissao.CORISTA_CORRIGIR_NASCIMENTO.name())) {
+            throw new CorrecaoDeNascimentoNegadaException();
+        }
         Pessoa pessoa = pessoaService.atualizar(corista.getPessoa().getId(), request.pessoa());
         preencher(corista, request);
         if (corista.getPromovidoEm() == null) {
             corista.setListaClassificacao(listaPelaIdade(pessoa));
         }
+        return coristaRepository.save(corista);
+    }
+
+    /** Troca só o tipo de voz (o que o maestro pode editar). A lista de classificação não muda. */
+    @Transactional
+    public Corista atualizarVoz(UUID id, TipoVoz tipoVoz) {
+        Corista corista = buscarPorId(id);
+        corista.setTipoVoz(tipoVoz);
         return coristaRepository.save(corista);
     }
 
@@ -124,6 +217,22 @@ public class CoristaService {
     public Corista reprovar(UUID id, UUID reprovadoPor) {
         Corista corista = buscarPorId(id);
         pessoaService.reprovar(corista.getPessoa().getId(), reprovadoPor);
+        return corista;
+    }
+
+    /** {@code APROVADO -> AFASTADO}. O status fica na pessoa, então a regra é a mesma de {@code PessoaService.afastar}. */
+    @Transactional
+    public Corista afastar(UUID id, UUID afastadoPor) {
+        Corista corista = buscarPorId(id);
+        pessoaService.afastar(corista.getPessoa().getId(), afastadoPor);
+        return corista;
+    }
+
+    /** {@code AFASTADO -> APROVADO}. Mesma regra de {@link #afastar}. */
+    @Transactional
+    public Corista retornarDoAfastamento(UUID id, UUID retornadoPor) {
+        Corista corista = buscarPorId(id);
+        pessoaService.retornarDoAfastamento(corista.getPessoa().getId(), retornadoPor);
         return corista;
     }
 

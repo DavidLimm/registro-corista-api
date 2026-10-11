@@ -69,6 +69,18 @@ public class Corista {
     @Column(name = "promovido_em")
     private Instant promovidoEm;
 
+    /** Desligado = cadastro de corista desativado: fora das listas e sem acesso, mas preservado. */
+    @Column(name = "desligado_em")
+    private Instant desligadoEm;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "motivo_desligamento", length = 30)
+    private MotivoDesligamento motivoDesligamento;
+
+    public boolean desligado() {
+        return desligadoEm != null;
+    }
+
     @CreationTimestamp
     @Column(name = "criado_em", nullable = false, updatable = false)
     private Instant criadoEm;

@@ -1,5 +1,9 @@
 package com.registraai.registro_coristas_api.corista.controller;
 
+import com.registraai.registro_coristas_api.corista.exception.PromocaoInvalidaException;
+import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
+import com.registraai.registro_coristas_api.suporte.SegurancaTesteConfig;
+import org.springframework.context.annotation.Import;
 import com.registraai.registro_coristas_api.area.model.Area;
 import com.registraai.registro_coristas_api.congregacao.exception.CongregacaoInativaException;
 import com.registraai.registro_coristas_api.congregacao.exception.CongregacaoNaoEncontradaException;
@@ -24,6 +28,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -50,6 +55,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(CoristaController.class)
+@Import(SegurancaTesteConfig.class)
+@WithUsuarioTeste
 class CoristaControllerTest {
 
     /** Relógio fixo: hoje = 2026-09-20, para a idade e a faixa etária das respostas serem determinísticas. */
@@ -200,7 +207,7 @@ class CoristaControllerTest {
 
         mockMvc.perform(post("/v1/api/coristas").contentType(MediaType.APPLICATION_JSON).content("{ "
                         + PESSOA_MINIMA + ", \"tipoVoz\": \"SOPRANO\", \"tamanhoCamisa\": \"M\","
-                        + " \"usuario\": { \"email\": \"maria@exemplo.com\", \"senha\": \"senhaForte123\" } }"))
+                        + " \"usuario\": { \"email\": \"maria@exemplo.com\", \"senha\": \"SenhaForte@123\" } }"))
                 .andExpect(status().isCreated());
     }
 
@@ -398,11 +405,11 @@ class CoristaControllerTest {
     @Test
     void aprovar_retorna200() throws Exception {
         UUID id = UUID.randomUUID();
-        UUID aprovador = UUID.randomUUID();
+        UUID aprovador = UUID.fromString(WithUsuarioTeste.ID_PADRAO);
         when(coristaService.aprovar(id, aprovador))
                 .thenReturn(coristaPersistido(id, LocalDate.of(2000, 5, 17), ListaClassificacao.JOVEM));
 
-        mockMvc.perform(patch("/v1/api/coristas/{id}/aprovar", id).param("aprovadoPor", aprovador.toString()))
+        mockMvc.perform(patch("/v1/api/coristas/{id}/aprovar", id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id.toString()));
     }
@@ -410,19 +417,107 @@ class CoristaControllerTest {
     @Test
     void reprovar_retorna200() throws Exception {
         UUID id = UUID.randomUUID();
-        UUID reprovador = UUID.randomUUID();
+        UUID reprovador = UUID.fromString(WithUsuarioTeste.ID_PADRAO);
         when(coristaService.reprovar(id, reprovador))
                 .thenReturn(coristaPersistido(id, LocalDate.of(2000, 5, 17), ListaClassificacao.JOVEM));
 
-        mockMvc.perform(patch("/v1/api/coristas/{id}/reprovar", id).param("reprovadoPor", reprovador.toString()))
+        mockMvc.perform(patch("/v1/api/coristas/{id}/reprovar", id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id.toString()));
     }
 
     @Test
-    void reprovar_semParametroObrigatorio_retorna400() throws Exception {
-        mockMvc.perform(patch("/v1/api/coristas/{id}/reprovar", UUID.randomUUID())).andExpect(status().isBadRequest());
+    @WithAnonymousUser
+    void reprovar_semAutenticacao_retorna401() throws Exception {
+        mockMvc.perform(patch("/v1/api/coristas/{id}/reprovar", UUID.randomUUID())).andExpect(status().isUnauthorized());
 
         verifyNoInteractions(coristaService);
+    }
+
+    // ---------- cadastro próprio e voz ----------
+
+    @Test
+    void meuCadastro_retorna200() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(coristaService.buscarDoUsuarioLogado())
+                .thenReturn(coristaPersistido(id, LocalDate.of(2000, 5, 17), ListaClassificacao.JOVEM));
+
+        mockMvc.perform(get("/v1/api/coristas/meu"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id.toString()));
+    }
+
+    @Test
+    void meuCadastro_quemNaoECorista_retorna404() throws Exception {
+        when(coristaService.buscarDoUsuarioLogado()).thenThrow(new CoristaNaoEncontradoException(UUID.randomUUID()));
+
+        mockMvc.perform(get("/v1/api/coristas/meu")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    @WithAnonymousUser
+    void meuCadastro_semAutenticacao_retorna401() throws Exception {
+        mockMvc.perform(get("/v1/api/coristas/meu")).andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(coristaService);
+    }
+
+    @Test
+    void atualizarVoz_retorna200() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(coristaService.atualizarVoz(id, TipoVoz.BAIXO))
+                .thenReturn(coristaPersistido(id, LocalDate.of(2000, 5, 17), ListaClassificacao.JOVEM));
+
+        mockMvc.perform(patch("/v1/api/coristas/{id}/voz", id).contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"tipoVoz\": \"BAIXO\" }"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id.toString()));
+    }
+
+    @Test
+    void atualizarVoz_semTipoDeVozOuValorInvalido_retorna400ENaoChamaService() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(patch("/v1/api/coristas/{id}/voz", id).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(patch("/v1/api/coristas/{id}/voz", id).contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"tipoVoz\": \"NAO_EXISTE\" }"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(coristaService);
+    }
+
+    @Test
+    @WithUsuarioTeste(papeis = "MAESTRO_JOVENS", todasPermissoes = false, permissoes = {"CORISTA_ATUALIZAR_VOZ"})
+    void maestroSoComPermissaoDeVoz_naoInativaNemEditaOCorista() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(put("/v1/api/coristas/{id}", id).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest()); // a validação do corpo vem antes da autorização
+
+        mockMvc.perform(delete("/v1/api/coristas/{id}", id)).andExpect(status().isForbidden());
+    }
+
+    // ---------- promover ----------
+
+    @Test
+    void promover_retorna200ERegistraQuemEstaLogado() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID lider = UUID.fromString(WithUsuarioTeste.ID_PADRAO);
+        when(coristaService.promover(id, lider))
+                .thenReturn(coristaPersistido(id, LocalDate.of(2010, 3, 1), ListaClassificacao.JOVEM));
+
+        mockMvc.perform(patch("/v1/api/coristas/{id}/promover", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.listaClassificacao").value("JOVEM"));
+    }
+
+    @Test
+    void promover_invalida_retorna409() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(coristaService.promover(id, UUID.fromString(WithUsuarioTeste.ID_PADRAO)))
+                .thenThrow(new PromocaoInvalidaException("o corista já está na lista de jovens."));
+
+        mockMvc.perform(patch("/v1/api/coristas/{id}/promover", id)).andExpect(status().isConflict());
     }
 }

@@ -1,5 +1,6 @@
 package com.registraai.registro_coristas_api.pessoa;
 
+import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
+@WithUsuarioTeste
 class PessoaIntegracaoTest {
 
     @Container
@@ -392,9 +394,9 @@ class PessoaIntegracaoTest {
     void aprovar_pendenteViraAprovadoComTrilha() throws Exception {
         String congregacaoId = criarCongregacao(criarArea(), "Sede");
         String id = cadastrar(congregacaoId, "Helo", haAnos(30, 0));
-        String aprovador = "11111111-1111-1111-1111-111111111111";
+        String aprovador = WithUsuarioTeste.ID_PADRAO; // quem está logado é quem aprova
 
-        mockMvc.perform(patch("/v1/api/pessoas/" + id + "/aprovar").param("aprovadoPor", aprovador))
+        mockMvc.perform(patch("/v1/api/pessoas/" + id + "/aprovar"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("APROVADO"))
                 .andExpect(jsonPath("$.aprovadoPor").value(aprovador));
@@ -404,15 +406,15 @@ class PessoaIntegracaoTest {
     void reprovar_pendenteViraReprovadoComTrilhaENaoPodeSerAprovadoDepois() throws Exception {
         String congregacaoId = criarCongregacao(criarArea(), "Sede");
         String id = cadastrar(congregacaoId, "Ivo", haAnos(30, 0));
-        String reprovador = "22222222-2222-2222-2222-222222222222";
+        String reprovador = WithUsuarioTeste.ID_PADRAO;
 
-        mockMvc.perform(patch("/v1/api/pessoas/" + id + "/reprovar").param("reprovadoPor", reprovador))
+        mockMvc.perform(patch("/v1/api/pessoas/" + id + "/reprovar"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("REPROVADO"))
                 .andExpect(jsonPath("$.reprovadoPor").value(reprovador));
 
         // uma vez reprovado, não sai mais de lá sozinho (não reverte para PENDENTE/APROVADO por esse caminho)
-        mockMvc.perform(patch("/v1/api/pessoas/" + id + "/aprovar").param("aprovadoPor", reprovador))
+        mockMvc.perform(patch("/v1/api/pessoas/" + id + "/aprovar"))
                 .andExpect(status().isConflict());
     }
 
@@ -420,9 +422,9 @@ class PessoaIntegracaoTest {
     void aprovarEReprovar_inexistente_retorna404() throws Exception {
         String id = "00000000-0000-0000-0000-000000000000";
 
-        mockMvc.perform(patch("/v1/api/pessoas/" + id + "/aprovar").param("aprovadoPor", id))
+        mockMvc.perform(patch("/v1/api/pessoas/" + id + "/aprovar"))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(patch("/v1/api/pessoas/" + id + "/reprovar").param("reprovadoPor", id))
+        mockMvc.perform(patch("/v1/api/pessoas/" + id + "/reprovar"))
                 .andExpect(status().isNotFound());
     }
 }

@@ -7,6 +7,7 @@ import com.registraai.registro_coristas_api.area.service.AreaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -30,6 +31,7 @@ public class AreaController {
 
     private final AreaService areaService;
 
+    @PreAuthorize("hasAuthority('AREA_GERENCIAR')")
     @PostMapping
     public ResponseEntity<AreaResponse> criar(@Valid @RequestBody AreaRequest request) {
         Area area = areaService.criar(request);
@@ -50,18 +52,21 @@ public class AreaController {
         return AreaResponse.de(areaService.buscarPorId(id));
     }
 
+    @PreAuthorize("hasAuthority('AREA_GERENCIAR')")
     @PutMapping("/{id}")
     public AreaResponse atualizar(@PathVariable UUID id, @Valid @RequestBody AreaRequest request) {
         return AreaResponse.de(areaService.atualizar(id, request));
     }
 
     /** Soft delete: marca a área como inativa (não remove a linha). */
+    @PreAuthorize("hasAuthority('AREA_GERENCIAR')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> inativar(@PathVariable UUID id) {
         areaService.inativar(id);
         return ResponseEntity.noContent().build();
     }
 
+    @PreAuthorize("hasAuthority('AREA_GERENCIAR')")
     @PatchMapping("/{id}/reativar")
     public AreaResponse reativar(@PathVariable UUID id) {
         return AreaResponse.de(areaService.reativar(id));

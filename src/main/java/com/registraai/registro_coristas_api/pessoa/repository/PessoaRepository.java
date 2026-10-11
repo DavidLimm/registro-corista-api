@@ -19,6 +19,10 @@ public interface PessoaRepository extends JpaRepository<Pessoa, UUID>, JpaSpecif
     @EntityGraph(attributePaths = {"congregacao", "congregacao.area", "endereco"})
     Optional<Pessoa> findById(UUID id);
 
+    Optional<Pessoa> findByEnderecoId(UUID enderecoId);
+
+    boolean existsByIdAndEnderecoId(UUID id, UUID enderecoId);
+
     @Override
     @EntityGraph(attributePaths = {"congregacao", "congregacao.area", "endereco"})
     Page<Pessoa> findAll(Specification<Pessoa> spec, Pageable pageable);

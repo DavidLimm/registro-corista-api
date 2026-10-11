@@ -7,6 +7,7 @@ import com.registraai.registro_coristas_api.congregacao.service.CongregacaoServi
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -30,6 +31,7 @@ public class CongregacaoController {
 
     private final CongregacaoService congregacaoService;
 
+    @PreAuthorize("hasAuthority('CONGREGACAO_GERENCIAR')")
     @PostMapping
     public ResponseEntity<CongregacaoResponse> criar(@Valid @RequestBody CongregacaoRequest request) {
         Congregacao congregacao = congregacaoService.criar(request);
@@ -51,18 +53,21 @@ public class CongregacaoController {
         return CongregacaoResponse.de(congregacaoService.buscarPorId(id));
     }
 
+    @PreAuthorize("hasAuthority('CONGREGACAO_GERENCIAR')")
     @PutMapping("/{id}")
     public CongregacaoResponse atualizar(@PathVariable UUID id, @Valid @RequestBody CongregacaoRequest request) {
         return CongregacaoResponse.de(congregacaoService.atualizar(id, request));
     }
 
     /** Soft delete: marca a congregação como inativa (não remove a linha). */
+    @PreAuthorize("hasAuthority('CONGREGACAO_GERENCIAR')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> inativar(@PathVariable UUID id) {
         congregacaoService.inativar(id);
         return ResponseEntity.noContent().build();
     }
 
+    @PreAuthorize("hasAuthority('CONGREGACAO_GERENCIAR')")
     @PatchMapping("/{id}/reativar")
     public CongregacaoResponse reativar(@PathVariable UUID id) {
         return CongregacaoResponse.de(congregacaoService.reativar(id));

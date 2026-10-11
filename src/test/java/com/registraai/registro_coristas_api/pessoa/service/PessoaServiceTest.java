@@ -18,6 +18,7 @@ import com.registraai.registro_coristas_api.pessoa.exception.TransicaoDeStatusIn
 import com.registraai.registro_coristas_api.pessoa.model.FaixaEtaria;
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
 import com.registraai.registro_coristas_api.pessoa.model.StatusPessoa;
+import com.registraai.registro_coristas_api.pessoa.repository.HistoricoStatusPessoaRepository;
 import com.registraai.registro_coristas_api.pessoa.repository.PessoaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -61,6 +63,9 @@ class PessoaServiceTest {
     private PessoaRepository pessoaRepository;
 
     @Mock
+    private HistoricoStatusPessoaRepository historicoStatusPessoaRepository;
+
+    @Mock
     private CongregacaoService congregacaoService;
 
     @Mock
@@ -77,7 +82,8 @@ class PessoaServiceTest {
 
     @BeforeEach
     void criarService() {
-        pessoaService = new PessoaService(pessoaRepository, congregacaoService, enderecoService, RELOGIO);
+        pessoaService = new PessoaService(
+                pessoaRepository, historicoStatusPessoaRepository, congregacaoService, enderecoService, RELOGIO);
     }
 
     private PessoaRequest request(LocalDate nascimento, EnderecoRequest endereco, String responsavelNome,
@@ -417,6 +423,71 @@ class PessoaServiceTest {
 
         assertThatThrownBy(() -> pessoaService.aprovar(id, UUID.randomUUID()))
                 .isInstanceOf(PessoaNaoEncontradaException.class);
+    }
+
+    // ---------- afastar / retornarDoAfastamento ----------
+
+    @Test
+    void afastar_aprovadoViraAfastadoComTrilha() {
+        UUID id = UUID.randomUUID();
+        UUID lider = UUID.randomUUID();
+        when(pessoaRepository.findById(id)).thenReturn(Optional.of(pessoaAprovada(id)));
+        repositorioDevolveOQueRecebe();
+
+        Pessoa afastada = pessoaService.afastar(id, lider);
+
+        assertThat(afastada.getStatus()).isEqualTo(StatusPessoa.AFASTADO);
+        assertThat(afastada.getAfastadoPor()).isEqualTo(lider);
+        assertThat(afastada.getAfastadoEm()).isEqualTo(AGORA);
+        verify(historicoStatusPessoaRepository).save(argThat(h ->
+                h.getStatusAnterior() == StatusPessoa.APROVADO
+                        && h.getStatusNovo() == StatusPessoa.AFASTADO
+                        && lider.equals(h.getRealizadoPor())));
+    }
+
+    @Test
+    void afastar_foraDeAprovadoLancaExcecaoENaoAltera() {
+        UUID id = UUID.randomUUID();
+        Pessoa pendente = Pessoa.builder().id(id).status(StatusPessoa.PENDENTE).build();
+        when(pessoaRepository.findById(id)).thenReturn(Optional.of(pendente));
+
+        assertThatThrownBy(() -> pessoaService.afastar(id, UUID.randomUUID()))
+                .isInstanceOf(TransicaoDeStatusInvalidaException.class);
+        assertThat(pendente.getStatus()).isEqualTo(StatusPessoa.PENDENTE);
+        verify(pessoaRepository, never()).save(any());
+    }
+
+    @Test
+    void retornarDoAfastamento_afastadoVoltaAprovadoELimpaATrilha() {
+        UUID id = UUID.randomUUID();
+        Pessoa afastada = Pessoa.builder().id(id).status(StatusPessoa.AFASTADO)
+                .afastadoPor(UUID.randomUUID()).afastadoEm(AGORA).build();
+        when(pessoaRepository.findById(id)).thenReturn(Optional.of(afastada));
+        repositorioDevolveOQueRecebe();
+
+        UUID retornador = UUID.randomUUID();
+
+        Pessoa retornada = pessoaService.retornarDoAfastamento(id, retornador);
+
+        assertThat(retornada.getStatus()).isEqualTo(StatusPessoa.APROVADO);
+        assertThat(retornada.getAfastadoPor()).isNull();
+        assertThat(retornada.getAfastadoEm()).isNull();
+        verify(historicoStatusPessoaRepository).save(argThat(h ->
+                h.getStatusAnterior() == StatusPessoa.AFASTADO
+                        && h.getStatusNovo() == StatusPessoa.APROVADO
+                        && retornador.equals(h.getRealizadoPor())));
+    }
+
+    @Test
+    void retornarDoAfastamento_foraDeAfastadoLancaExcecaoENaoAltera() {
+        UUID id = UUID.randomUUID();
+        Pessoa aprovada = pessoaAprovada(id);
+        when(pessoaRepository.findById(id)).thenReturn(Optional.of(aprovada));
+
+        assertThatThrownBy(() -> pessoaService.retornarDoAfastamento(id, UUID.randomUUID()))
+                .isInstanceOf(TransicaoDeStatusInvalidaException.class);
+        assertThat(aprovada.getStatus()).isEqualTo(StatusPessoa.APROVADO);
+        verify(pessoaRepository, never()).save(any());
     }
 
     // ---------- reprovar ----------

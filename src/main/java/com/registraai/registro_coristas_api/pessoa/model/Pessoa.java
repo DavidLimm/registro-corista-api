@@ -63,6 +63,13 @@ public class Pessoa {
     @JoinColumn(name = "endereco_id")
     private Endereco endereco;
 
+    /** Última vez que a própria pessoa alterou o telefone / o endereço (limite de uma alteração a cada 10 dias). */
+    @Column(name = "telefone_editado_em")
+    private Instant telefoneEditadoEm;
+
+    @Column(name = "endereco_editado_em")
+    private Instant enderecoEditadoEm;
+
     // LGPD: responsável legal é obrigatório para menores (exigência validada no Service); nome e telefone andam juntos
     @Column(name = "responsavel_legal_nome", length = 150)
     private String responsavelLegalNome;
@@ -88,6 +95,13 @@ public class Pessoa {
 
     @Column(name = "reprovado_em")
     private Instant reprovadoEm;
+
+    // trilha do afastamento: preenchida só enquanto o status for AFASTADO (ver V19)
+    @Column(name = "afastado_por")
+    private UUID afastadoPor;
+
+    @Column(name = "afastado_em")
+    private Instant afastadoEm;
 
     @CreationTimestamp
     @Column(name = "criado_em", nullable = false, updatable = false)
