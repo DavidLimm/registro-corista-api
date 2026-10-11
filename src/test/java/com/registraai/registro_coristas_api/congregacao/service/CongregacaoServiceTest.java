@@ -1,5 +1,6 @@
 package com.registraai.registro_coristas_api.congregacao.service;
 
+import com.registraai.registro_coristas_api.usuario.service.EscopoDeAcesso;
 import com.registraai.registro_coristas_api.agrupamento.exception.SubdivisaoInativaException;
 import com.registraai.registro_coristas_api.agrupamento.exception.SubdivisaoNaoEncontradaException;
 import com.registraai.registro_coristas_api.agrupamento.model.Subdivisao;
@@ -46,6 +47,9 @@ class CongregacaoServiceTest {
 
     @Mock
     private EnderecoService enderecoService;
+
+    @Mock
+    private EscopoDeAcesso escopo;
 
     @InjectMocks
     private CongregacaoService congregacaoService;

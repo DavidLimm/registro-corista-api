@@ -9,6 +9,7 @@ import com.registraai.registro_coristas_api.congregacao.exception.CongregacaoNom
 import com.registraai.registro_coristas_api.congregacao.model.Congregacao;
 import com.registraai.registro_coristas_api.congregacao.repository.CongregacaoRepository;
 import com.registraai.registro_coristas_api.endereco.service.EnderecoService;
+import com.registraai.registro_coristas_api.usuario.service.EscopoDeAcesso;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -25,10 +26,13 @@ public class CongregacaoService {
     private final CongregacaoRepository congregacaoRepository;
     private final SubdivisaoService subdivisaoService;
     private final EnderecoService enderecoService;
+    private final EscopoDeAcesso escopo;
 
     @Transactional
     public Congregacao criar(CongregacaoRequest request) {
         Subdivisao subdivisao = subdivisaoService.buscarAtivaParaVinculo(request.subdivisaoId());
+        // cada pastor só cria congregação nos próprios agrupamentos
+        escopo.exigirDentro(subdivisao);
         String nome = request.nome().trim();
         validarNomeDisponivel(subdivisao, nome, null);
 
@@ -74,11 +78,13 @@ public class CongregacaoService {
     @Transactional
     public Congregacao atualizar(UUID id, CongregacaoRequest request) {
         Congregacao congregacao = buscarPorId(id);
+        escopo.exigirDentro(congregacao);
         boolean mesmaSubdivisao = congregacao.getSubdivisao().getId().equals(request.subdivisaoId());
         // só exige subdivisão ativa quando está indo para outra (senão renomear congregação inativa em subdivisão inativa falharia)
         Subdivisao subdivisao = mesmaSubdivisao
                 ? congregacao.getSubdivisao()
                 : subdivisaoService.buscarAtivaParaVinculo(request.subdivisaoId());
+        escopo.exigirDentro(subdivisao);
         String nome = request.nome().trim();
         validarNomeDisponivel(subdivisao, nome, id);
 
@@ -98,6 +104,7 @@ public class CongregacaoService {
     @Transactional
     public void inativar(UUID id) {
         Congregacao congregacao = buscarPorId(id);
+        escopo.exigirDentro(congregacao);
         congregacao.setAtiva(false);
         congregacaoRepository.save(congregacao);
     }
@@ -106,6 +113,7 @@ public class CongregacaoService {
     @Transactional
     public Congregacao reativar(UUID id) {
         Congregacao congregacao = buscarPorId(id);
+        escopo.exigirDentro(congregacao);
         Subdivisao subdivisao = congregacao.getSubdivisao();
         if (!subdivisao.isAtivo() || !subdivisao.getAgrupamento().isAtivo()) {
             throw new SubdivisaoInativaException();

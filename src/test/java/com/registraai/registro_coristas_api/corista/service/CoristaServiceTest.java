@@ -1,5 +1,6 @@
 package com.registraai.registro_coristas_api.corista.service;
 
+import com.registraai.registro_coristas_api.usuario.service.EscopoDeAcesso;
 import com.registraai.registro_coristas_api.corista.model.MotivoDesligamento;
 import com.registraai.registro_coristas_api.autenticacao.service.UsuarioLogado;
 import com.registraai.registro_coristas_api.congregacao.model.Congregacao;
@@ -74,14 +75,24 @@ class CoristaServiceTest {
     @Mock
     private UsuarioLogado usuarioLogado;
 
+    @Mock
+    private EscopoDeAcesso escopo;
+
     private CoristaService coristaService;
 
     private final PessoaRequest pessoaRequest =
             new PessoaRequest("Maria", ADULTO, UUID.randomUUID(), null, null, null, null);
 
     @BeforeEach
+    void semRestricaoDeEscopo() {
+        // o recorte por agrupamento tem testes próprios (EscopoDeAcessoTest); aqui ninguém é barrado por ele
+        org.mockito.Mockito.lenient().when(escopo.restringirA(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocacao -> org.springframework.data.jpa.domain.Specification.unrestricted());
+    }
+
+    @BeforeEach
     void criarService() {
-        coristaService = new CoristaService(coristaRepository, pessoaService, usuarioService, usuarioLogado, RELOGIO);
+        coristaService = new CoristaService(coristaRepository, pessoaService, usuarioService, usuarioLogado, escopo, RELOGIO);
         // por padrão quem chama é um ADMIN (as duas listas, e pode corrigir nascimento); os testes de recorte trocam isso
         Usuario admin = usuario("ADMIN");
         lenient().when(usuarioLogado.atual()).thenReturn(Optional.of(admin));

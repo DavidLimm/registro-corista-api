@@ -87,4 +87,49 @@ class MigracaoHierarquiaTest {
             st.execute("INSERT INTO agrupamento (tipo, numero, nome) VALUES ('SETOR', 40, 'Setor 40')");
         }
     }
+
+    @Test
+    void v32DaEscopoAQuemJaTinhaLoginSemTocarEmAdminNemEmQuemJaTemVinculo() throws SQLException {
+        flyway("31").migrate();
+
+        try (Connection c = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+             Statement st = c.createStatement()) {
+            st.execute("""
+                    INSERT INTO congregacao (subdivisao_id, nome)
+                    SELECT s.id, 'Sede 40' FROM subdivisao s JOIN agrupamento g ON g.id = s.agrupamento_id
+                    WHERE g.tipo = 'AREA' AND g.numero = 40""");
+            for (String nome : new String[]{"lider", "admin", "pastor"}) {
+                st.execute("INSERT INTO pessoa (nome, data_nascimento, congregacao_id) "
+                        + "SELECT '" + nome + "', DATE '1990-01-01', id FROM congregacao WHERE nome = 'Sede 40'");
+                st.execute("INSERT INTO usuario (pessoa_id, email, senha_hash) "
+                        + "SELECT id, '" + nome + "@exemplo.com', 'hash' FROM pessoa WHERE nome = '" + nome + "'");
+            }
+            st.execute("INSERT INTO usuario_role (usuario_id, role_id) SELECT u.id, r.id FROM usuario u, role r "
+                    + "WHERE u.email = 'lider@exemplo.com' AND r.nome = 'LIDER_MOCIDADE'");
+            st.execute("INSERT INTO usuario_role (usuario_id, role_id) SELECT u.id, r.id FROM usuario u, role r "
+                    + "WHERE u.email = 'admin@exemplo.com' AND r.nome = 'ADMIN'");
+            st.execute("INSERT INTO usuario_role (usuario_id, role_id) SELECT u.id, r.id FROM usuario u, role r "
+                    + "WHERE u.email = 'pastor@exemplo.com' AND r.nome = 'PASTOR'");
+            // o pastor já foi designado para a Área 41 antes do backfill
+            st.execute("INSERT INTO usuario_agrupamento (usuario_id, agrupamento_id) "
+                    + "SELECT u.id, g.id FROM usuario u, agrupamento g WHERE u.email = 'pastor@exemplo.com' "
+                    + "AND g.tipo = 'AREA' AND g.numero = 41");
+
+            flyway("latest").migrate();
+
+            assertThat(consultaUnica(st, """
+                    SELECT g.numero FROM usuario_agrupamento ua JOIN usuario u ON u.id = ua.usuario_id
+                    JOIN agrupamento g ON g.id = ua.agrupamento_id WHERE u.email = 'lider@exemplo.com'""")).isEqualTo("40");
+            assertThat(consultaUnica(st, """
+                    SELECT count(*) FROM usuario_agrupamento ua JOIN usuario u ON u.id = ua.usuario_id
+                    WHERE u.email = 'admin@exemplo.com'""")).isEqualTo("0");
+            // quem já tinha vínculo fica como estava (só a Área 41)
+            assertThat(consultaUnica(st, """
+                    SELECT count(*) FROM usuario_agrupamento ua JOIN usuario u ON u.id = ua.usuario_id
+                    WHERE u.email = 'pastor@exemplo.com'""")).isEqualTo("1");
+            assertThat(consultaUnica(st, """
+                    SELECT g.numero FROM usuario_agrupamento ua JOIN usuario u ON u.id = ua.usuario_id
+                    JOIN agrupamento g ON g.id = ua.agrupamento_id WHERE u.email = 'pastor@exemplo.com'""")).isEqualTo("41");
+        }
+    }
 }

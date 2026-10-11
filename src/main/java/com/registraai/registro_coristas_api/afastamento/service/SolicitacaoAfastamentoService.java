@@ -10,6 +10,8 @@ import com.registraai.registro_coristas_api.corista.service.CoristaService;
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
 import com.registraai.registro_coristas_api.pessoa.model.StatusPessoa;
 import com.registraai.registro_coristas_api.pessoa.service.PessoaService;
+import com.registraai.registro_coristas_api.usuario.service.EscopoDeAcesso;
+import org.springframework.data.jpa.domain.Specification;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -32,6 +34,7 @@ public class SolicitacaoAfastamentoService {
     private final SolicitacaoAfastamentoRepository solicitacaoRepository;
     private final CoristaService coristaService;
     private final PessoaService pessoaService;
+    private final EscopoDeAcesso escopo;
     private final Clock clock;
 
     /**
@@ -59,9 +62,13 @@ public class SolicitacaoAfastamentoService {
     @Transactional(readOnly = true)
     public Page<SolicitacaoAfastamento> listar(StatusSolicitacao status, int pagina, int tamanho) {
         PageRequest pageable = PageRequest.of(pagina, tamanho, Sort.by("solicitadoEm").and(Sort.by("id")));
-        return status == null
-                ? solicitacaoRepository.findAll(pageable)
-                : solicitacaoRepository.findByStatus(status, pageable);
+        // só os pedidos de pessoas dos agrupamentos do usuário logado
+        Specification<SolicitacaoAfastamento> filtro = escopo.restringirA(
+                root -> root.get("pessoa").get("congregacao").get("subdivisao").get("agrupamento").get("id"));
+        if (status != null) {
+            filtro = filtro.and((root, query, cb) -> cb.equal(root.get("status"), status));
+        }
+        return solicitacaoRepository.findAll(filtro, pageable);
     }
 
     /** {@code PENDENTE -> APROVADA}: afasta a pessoa (registrando quem aprovou) e fecha o pedido. */
@@ -81,6 +88,10 @@ public class SolicitacaoAfastamentoService {
     private SolicitacaoAfastamento pendente(UUID id) {
         SolicitacaoAfastamento solicitacao = solicitacaoRepository.findById(id)
                 .orElseThrow(() -> new SolicitacaoAfastamentoNaoEncontradaException(id));
+        // pedido de pessoa fora do escopo: 404
+        if (escopo.fora(solicitacao.getPessoa())) {
+            throw new SolicitacaoAfastamentoNaoEncontradaException(id);
+        }
         if (solicitacao.getStatus() != StatusSolicitacao.PENDENTE) {
             throw new SolicitacaoAfastamentoInvalidaException("este pedido já foi decidido.");
         }

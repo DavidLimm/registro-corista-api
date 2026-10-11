@@ -71,11 +71,21 @@ class UsuarioServiceTest {
     @Mock
     private EscopoService escopoService;
 
+    @Mock
+    private EscopoDeAcesso escopo;
+
     private UsuarioService usuarioService;
 
     @BeforeEach
+    void semRestricaoDeEscopo() {
+        // o recorte por agrupamento tem testes próprios (EscopoDeAcessoTest); aqui ninguém é barrado por ele
+        org.mockito.Mockito.lenient().when(escopo.restringirA(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocacao -> org.springframework.data.jpa.domain.Specification.unrestricted());
+    }
+
+    @BeforeEach
     void criarService() {
-        usuarioService = new UsuarioService(usuarioRepository, pessoaService, roleRepository, passwordEncoder, eventos, usuarioLogado, escopoService);
+        usuarioService = new UsuarioService(usuarioRepository, pessoaService, roleRepository, passwordEncoder, eventos, usuarioLogado, escopoService, escopo);
     }
 
     private Pessoa pessoaAprovada() {

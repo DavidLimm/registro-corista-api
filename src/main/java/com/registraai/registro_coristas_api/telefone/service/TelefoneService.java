@@ -59,6 +59,8 @@ public class TelefoneService {
 
     @Transactional(readOnly = true)
     public Telefone buscarPorId(UUID pessoaId, UUID id) {
+        // a pessoa dona precisa estar no escopo de quem pede (404 se não estiver)
+        pessoaService.buscarPorId(pessoaId);
         return telefoneRepository.findByIdAndPessoaId(id, pessoaId)
                 .orElseThrow(() -> new TelefoneNaoEncontradoException(id));
     }

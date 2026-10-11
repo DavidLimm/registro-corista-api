@@ -52,6 +52,7 @@ public class UsuarioService {
     private final ApplicationEventPublisher eventos;
     private final UsuarioLogado usuarioLogado;
     private final EscopoService escopoService;
+    private final EscopoDeAcesso escopo;
 
     /** A pessoa ainda não pode ter usuário; o e-mail é único no sistema. */
     @Transactional
@@ -100,8 +101,13 @@ public class UsuarioService {
 
     @Transactional(readOnly = true)
     public Usuario buscarPorId(UUID id) {
-        return usuarioRepository.findById(id)
+        Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new UsuarioNaoEncontradoException(id));
+        // login de pessoa fora dos agrupamentos do usuário logado: 404
+        if (escopo.fora(usuario.getPessoa())) {
+            throw new UsuarioNaoEncontradoException(id);
+        }
+        return usuario;
     }
 
     /**
@@ -110,7 +116,8 @@ public class UsuarioService {
      */
     @Transactional(readOnly = true)
     public Page<Usuario> listar(Boolean ativo, int pagina, int tamanho) {
-        Specification<Usuario> especificacao = Specification.unrestricted();
+        Specification<Usuario> especificacao = Specification.<Usuario>unrestricted().and(escopo.restringirA(
+                root -> root.get("pessoa").get("congregacao").get("subdivisao").get("agrupamento").get("id")));
         if (ativo != null) {
             especificacao = especificacao.and((root, query, cb) -> cb.equal(root.get("ativo"), ativo));
         }

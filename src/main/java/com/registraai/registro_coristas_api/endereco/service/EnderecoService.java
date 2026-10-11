@@ -5,6 +5,7 @@ import com.registraai.registro_coristas_api.endereco.exception.EnderecoNaoEncont
 import com.registraai.registro_coristas_api.endereco.model.Endereco;
 import com.registraai.registro_coristas_api.endereco.repository.EnderecoRepository;
 import com.registraai.registro_coristas_api.pessoa.repository.PessoaRepository;
+import com.registraai.registro_coristas_api.usuario.service.EscopoDeAcesso;
 import com.registraai.registro_coristas_api.pessoa.service.LimiteDeEdicaoDeContato;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ public class EnderecoService {
     private final EnderecoRepository enderecoRepository;
     private final PessoaRepository pessoaRepository;
     private final LimiteDeEdicaoDeContato limiteDeEdicaoDeContato;
+    private final EscopoDeAcesso escopo;
 
     @Transactional
     public Endereco criar(EnderecoRequest request) {
@@ -31,8 +33,13 @@ public class EnderecoService {
 
     @Transactional(readOnly = true)
     public Endereco buscarPorId(UUID id) {
-        return enderecoRepository.findById(id)
+        Endereco endereco = enderecoRepository.findById(id)
                 .orElseThrow(() -> new EnderecoNaoEncontradoException(id));
+        // endereço de pessoa fora dos agrupamentos do usuário logado: 404
+        if (pessoaRepository.findByEnderecoId(id).filter(escopo::fora).isPresent()) {
+            throw new EnderecoNaoEncontradoException(id);
+        }
+        return endereco;
     }
 
     /**

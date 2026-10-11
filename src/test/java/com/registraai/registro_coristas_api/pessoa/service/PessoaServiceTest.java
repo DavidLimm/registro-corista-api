@@ -1,5 +1,6 @@
 package com.registraai.registro_coristas_api.pessoa.service;
 
+import com.registraai.registro_coristas_api.usuario.service.EscopoDeAcesso;
 import com.registraai.registro_coristas_api.agrupamento.model.Subdivisao;
 import com.registraai.registro_coristas_api.suporte.HierarquiaTeste;
 import com.registraai.registro_coristas_api.congregacao.exception.CongregacaoInativaException;
@@ -72,6 +73,9 @@ class PessoaServiceTest {
     @Mock
     private EnderecoService enderecoService;
 
+    @Mock
+    private EscopoDeAcesso escopo;
+
     private PessoaService pessoaService;
 
     private final UUID congregacaoId = UUID.randomUUID();
@@ -82,9 +86,16 @@ class PessoaServiceTest {
             new EnderecoRequest("Rua da Aurora", "123", null, "Boa Vista", "Recife", "PE", "50050000");
 
     @BeforeEach
+    void semRestricaoDeEscopo() {
+        // o recorte por agrupamento tem testes próprios (EscopoDeAcessoTest); aqui ninguém é barrado por ele
+        org.mockito.Mockito.lenient().when(escopo.restringirA(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocacao -> org.springframework.data.jpa.domain.Specification.unrestricted());
+    }
+
+    @BeforeEach
     void criarService() {
         pessoaService = new PessoaService(
-                pessoaRepository, historicoStatusPessoaRepository, congregacaoService, enderecoService, RELOGIO);
+                pessoaRepository, historicoStatusPessoaRepository, congregacaoService, enderecoService, escopo, RELOGIO);
     }
 
     private PessoaRequest request(LocalDate nascimento, EnderecoRequest endereco, String responsavelNome,
