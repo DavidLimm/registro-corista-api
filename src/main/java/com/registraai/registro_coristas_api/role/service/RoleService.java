@@ -30,6 +30,7 @@ public class RoleService {
 
     /** O papel que sempre tem todas as permissões: nunca editado pela API (novas permissões entram por migration). */
     private static final String ROLE_ADMIN = "ADMIN";
+    private static final String ROLE_PASTOR_ADMIN = "PASTOR_ADMIN";
 
     private final RoleRepository roleRepository;
     private final PermissaoRegistroRepository permissaoRegistroRepository;
@@ -143,12 +144,12 @@ public class RoleService {
 
     /**
      * Substitui as permissões do papel pelo conjunto informado (vazio tira todas). Vale na hora para quem tem o papel,
-     * porque as permissões são lidas do banco a cada requisição. O {@code ADMIN} não é editável.
+     * porque as permissões são lidas do banco a cada requisição. O {@code ADMIN} e o {@code PASTOR_ADMIN} não são editáveis.
      */
     @Transactional
     public Set<String> definirPermissoes(UUID id, Set<String> nomesPedidos) {
         Role role = buscarPorId(id);
-        if (ROLE_ADMIN.equals(role.getNome())) {
+        if (ROLE_ADMIN.equals(role.getNome()) || ROLE_PASTOR_ADMIN.equals(role.getNome())) {
             throw new RoleProtegidaException(role.getNome());
         }
         Set<String> pedidos = nomesPedidos.stream().map(String::trim).collect(Collectors.toSet());

@@ -30,6 +30,7 @@ final class RecorteDeAcesso {
     private static final Map<String, Set<ListaClassificacao>> POR_PAPEL = Map.ofEntries(
             Map.entry("ADMIN", AMBAS),
             Map.entry("PASTOR", AMBAS),
+            Map.entry("PASTOR_ADMIN", AMBAS),
             Map.entry("PRESBITERO", AMBAS),
             Map.entry("LIDER_MOCIDADE", AMBAS),
             Map.entry("LIDER_ADOLESCENTES", SO_ADOLESCENTES),

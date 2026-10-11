@@ -68,6 +68,7 @@ class AutorizacaoEndpointsIntegracaoTest {
                 alvo(HttpMethod.GET, "/v1/api/usuarios/" + ID, "USUARIO_GERENCIAR"),
                 alvo(HttpMethod.DELETE, "/v1/api/usuarios/" + ID, "USUARIO_GERENCIAR"),
                 alvo(HttpMethod.PATCH, "/v1/api/usuarios/" + ID + "/reativar", "USUARIO_GERENCIAR"),
+                alvo(HttpMethod.GET, "/v1/api/usuarios/" + ID + "/agrupamentos", "ESCOPO_GERENCIAR"),
                 // estrutura da igreja e papéis
                 alvo(HttpMethod.DELETE, "/v1/api/agrupamentos/" + ID, "AGRUPAMENTO_GERENCIAR"),
                 alvo(HttpMethod.PATCH, "/v1/api/agrupamentos/" + ID + "/reativar", "AGRUPAMENTO_GERENCIAR"),
