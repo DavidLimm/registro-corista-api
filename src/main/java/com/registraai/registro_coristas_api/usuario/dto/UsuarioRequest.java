@@ -3,6 +3,7 @@ package com.registraai.registro_coristas_api.usuario.dto;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import com.registraai.registro_coristas_api.usuario.validation.SenhaForte;
 import jakarta.validation.constraints.Size;
 
 import java.util.Set;
@@ -21,7 +22,7 @@ public record UsuarioRequest(
         @NotNull @Email @Size(max = 150)
         String email,
 
-        @NotNull @Size(min = 8, max = 100)
+        @NotNull @SenhaForte @Size(max = 100)
         String senha,
 
         @NotEmpty
