@@ -30,6 +30,7 @@ public enum Permissao {
     // Estrutura da igreja
     AREA_GERENCIAR,          // criar, editar e inativar áreas (apenas PASTOR)
     CONGREGACAO_GERENCIAR,   // criar, editar e inativar congregações (apenas PASTOR)
+    AGRUPAMENTO_GERENCIAR,   // criar, editar e inativar agrupamentos e subdivisões (apenas ADMIN por ora)
 
     // Acesso e papéis
     USUARIO_GERENCIAR,           // criar, editar, inativar e reativar logins (apenas PASTOR)

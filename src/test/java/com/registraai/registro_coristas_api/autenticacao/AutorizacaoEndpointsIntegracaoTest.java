@@ -71,6 +71,10 @@ class AutorizacaoEndpointsIntegracaoTest {
                 // estrutura da igreja e papéis
                 alvo(HttpMethod.DELETE, "/v1/api/areas/" + ID, "AREA_GERENCIAR"),
                 alvo(HttpMethod.PATCH, "/v1/api/areas/" + ID + "/reativar", "AREA_GERENCIAR"),
+                alvo(HttpMethod.DELETE, "/v1/api/agrupamentos/" + ID, "AGRUPAMENTO_GERENCIAR"),
+                alvo(HttpMethod.PATCH, "/v1/api/agrupamentos/" + ID + "/reativar", "AGRUPAMENTO_GERENCIAR"),
+                alvo(HttpMethod.DELETE, "/v1/api/agrupamentos/" + ID + "/subdivisoes/" + ID, "AGRUPAMENTO_GERENCIAR"),
+                alvo(HttpMethod.PATCH, "/v1/api/agrupamentos/" + ID + "/subdivisoes/" + ID + "/reativar", "AGRUPAMENTO_GERENCIAR"),
                 alvo(HttpMethod.DELETE, "/v1/api/congregacoes/" + ID, "CONGREGACAO_GERENCIAR"),
                 alvo(HttpMethod.PATCH, "/v1/api/congregacoes/" + ID + "/reativar", "CONGREGACAO_GERENCIAR"),
                 alvo(HttpMethod.DELETE, "/v1/api/roles/" + ID, "ROLE_GERENCIAR_PERMISSOES"),
