@@ -3,7 +3,8 @@ package com.registraai.registro_coristas_api.pessoa.controller;
 import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
 import com.registraai.registro_coristas_api.suporte.SegurancaTesteConfig;
 import org.springframework.context.annotation.Import;
-import com.registraai.registro_coristas_api.area.model.Area;
+import com.registraai.registro_coristas_api.agrupamento.model.Subdivisao;
+import com.registraai.registro_coristas_api.suporte.HierarquiaTeste;
 import com.registraai.registro_coristas_api.congregacao.exception.CongregacaoInativaException;
 import com.registraai.registro_coristas_api.congregacao.exception.CongregacaoNaoEncontradaException;
 import com.registraai.registro_coristas_api.congregacao.model.Congregacao;
@@ -68,7 +69,7 @@ class PessoaControllerTest {
     }
 
     private static final UUID CONGREGACAO_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
-    private static final UUID AREA_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID SUBDIVISAO_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
     private static final String JSON_VALIDO = """
             {
@@ -87,8 +88,8 @@ class PessoaControllerTest {
 
     private Pessoa pessoaPersistida(UUID id, LocalDate nascimento, StatusPessoa status, boolean comEndereco) {
         Instant agora = Instant.parse("2026-09-20T12:00:00Z");
-        Area area = Area.builder().id(AREA_ID).numero(40).nome("Área 40").criadoEm(agora).atualizadoEm(agora).build();
-        Congregacao congregacao = Congregacao.builder().id(CONGREGACAO_ID).area(area).nome("Sede").ativa(true).build();
+        Subdivisao subdivisao = HierarquiaTeste.subdivisaoDaArea40(UUID.randomUUID(), SUBDIVISAO_ID);
+        Congregacao congregacao = Congregacao.builder().id(CONGREGACAO_ID).subdivisao(subdivisao).nome("Sede").ativa(true).build();
         Endereco endereco = comEndereco
                 ? Endereco.builder().id(UUID.randomUUID()).logradouro("Rua da Aurora").bairro("Boa Vista")
                         .cidade("Recife").uf("PE").criadoEm(agora).atualizadoEm(agora).build()
@@ -120,7 +121,7 @@ class PessoaControllerTest {
                 .andExpect(jsonPath("$.idade").value(26))
                 .andExpect(jsonPath("$.faixaEtaria").value("JOVEM"))
                 .andExpect(jsonPath("$.congregacao.nome").value("Sede"))
-                .andExpect(jsonPath("$.congregacao.area.numero").value(40))
+                .andExpect(jsonPath("$.congregacao.agrupamento.numero").value(40))
                 .andExpect(jsonPath("$.endereco.logradouro").value("Rua da Aurora"));
     }
 
@@ -237,12 +238,12 @@ class PessoaControllerTest {
         UUID id = UUID.randomUUID();
         var pagina = new PageImpl<>(List.of(pessoaPersistida(id, LocalDate.of(2010, 3, 1))),
                 PageRequest.of(1, 5), 11);
-        var filtro = new PessoaFiltro("mar", AREA_ID, CONGREGACAO_ID, FaixaEtaria.ADOLESCENTE, StatusPessoa.PENDENTE);
+        var filtro = new PessoaFiltro("mar", null, SUBDIVISAO_ID, CONGREGACAO_ID, FaixaEtaria.ADOLESCENTE, StatusPessoa.PENDENTE);
         when(pessoaService.listar(filtro, 1, 5)).thenReturn(pagina);
 
         mockMvc.perform(get("/v1/api/pessoas")
                         .param("nome", "mar")
-                        .param("areaId", AREA_ID.toString())
+                        .param("subdivisaoId", SUBDIVISAO_ID.toString())
                         .param("congregacaoId", CONGREGACAO_ID.toString())
                         .param("faixaEtaria", "ADOLESCENTE")
                         .param("status", "PENDENTE")
@@ -260,7 +261,7 @@ class PessoaControllerTest {
 
     @Test
     void listar_semParametros_usaPaginaZeroTamanhoVinteESemFiltros() throws Exception {
-        var semFiltro = new PessoaFiltro(null, null, null, null, null);
+        var semFiltro = new PessoaFiltro(null, null, null, null, null, null);
         when(pessoaService.listar(semFiltro, 0, 20)).thenReturn(new PageImpl<>(List.of()));
 
         mockMvc.perform(get("/v1/api/pessoas"))
@@ -277,7 +278,7 @@ class PessoaControllerTest {
         mockMvc.perform(get("/v1/api/pessoas").param("page", "-1")).andExpect(status().isBadRequest());
         mockMvc.perform(get("/v1/api/pessoas").param("faixaEtaria", "NAO_EXISTE")).andExpect(status().isBadRequest());
         mockMvc.perform(get("/v1/api/pessoas").param("status", "NAO_EXISTE")).andExpect(status().isBadRequest());
-        mockMvc.perform(get("/v1/api/pessoas").param("areaId", "nao-e-uuid")).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/v1/api/pessoas").param("subdivisaoId", "nao-e-uuid")).andExpect(status().isBadRequest());
 
         verifyNoInteractions(pessoaService);
     }

@@ -5,21 +5,22 @@ Instruções para agentes de IA (ex: Claude Code) trabalhando neste repositório
 ## Visão Geral do Projeto
 
 Sistema de gestão da mocidade (coristas) da **Assembleia de Deus em Pernambuco**, com hierarquia
-**Área → Congregação → Pessoa → (Corista)** e controle de acesso baseado em papéis (RBAC).
+**Agrupamento → Subdivisão → Congregação → Pessoa → (Corista)** e controle de acesso baseado em papéis (RBAC).
 
-Hierarquia real: a IEAD-PE(Igreja Evangelica Assembleia de Deus Pernambuco) tem 74 áreas (matriz = Área 1).
-Cada área tem N congregações. MVP cobre apenas a **Área 40** (13 congregações), mas o modelo já nasce multi-área.
+Hierarquia real: a IEAD-PE(Igreja Evangelica Assembleia de Deus Pernambuco) tem 74 áreas (matriz = Área 1), além de setores, filiais e
+campos missionários (no exterior); cada um com N congregações (ver "Hierarquia Organizacional"). MVP cobre apenas a **Área 40**
+(13 congregações), mas o modelo já nasce multi-agrupamento.
 
 Stack: Java 21 + Spring Boot 4.1 + PostgreSQL 16 (Docker) + Spring Data JPA/Hibernate + Flyway + Spring Security (JWT).
 
 ## Arquitetura
 
 - **MVC clássico em camadas** (`Controller → Service → Repository → DB`)
-- Pacotes organizados **por feature/domínio** (`area`, `congregacao`, `pessoa`, `corista`, `evento`, `usuario`/security...),
+- Pacotes organizados **por feature/domínio** (`agrupamento`, `congregacao`, `pessoa`, `corista`, `evento`, `usuario`/security...),
   e **dentro** de cada um a divisão controller/service/repository/model/dto. NÃO organizar por camada técnica global.
 - DTOs obrigatórios na camada de apresentação — entidades JPA nunca expostas diretamente na API
 - Validações de negócio exclusivamente na camada `Service`, nunca na `Controller`
-- RBAC com escopo contextual: toda operação valida **role** e **vínculo geográfico** (área/congregação) do recurso acessado, sempre no backend — nunca confiar no frontend
+- RBAC com escopo contextual: toda operação valida **role** e **vínculo geográfico** (agrupamento/congregação) do recurso acessado, sempre no backend — nunca confiar no frontend
 - Decisão registrada: **não** migrar para monolito modular agora (over-engineering para projeto solo). MVC por feature já pavimenta essa evolução se necessário.
 
 ## Modelo de Identidade (decisão central — não reverter)
@@ -36,10 +37,10 @@ Corista (adolescente/jovem):   Usuario → Pessoa → Corista
 - Nem toda `Pessoa` tem `Usuario` (ex.: menor gerenciado pelo líder). Todo `Usuario` aponta para uma `Pessoa`.
 - NÃO existe entidade `Membro` único. NÃO recriar corista como tabela solta que duplica dados de pessoa.
 
-## Hierarquia Organizacional (decidido em 2026-10-10 — pendente de implementação)
+## Hierarquia Organizacional (decidida em 2026-10-10, implementada em 2026-10-11)
 
-Substitui a visão simplificada "Área → Congregação" do início deste arquivo (e o modelo atual da tabela `area`).
-Só entra no código via nova migration Flyway; nunca editar V1–V15. Mudar este modelo exige confirmação explícita.
+Substitui a visão simplificada "Área → Congregação" do início do projeto (a tabela `area` e o pacote `area` não existem mais).
+Só muda via nova migration Flyway; nunca editar V1–V32. Mudar este modelo exige confirmação explícita.
 
 ```
 Agrupamento (tipo)  →  Subdivisão (nível do meio)  →  Congregação
@@ -53,19 +54,35 @@ Agrupamento (tipo)  →  Subdivisão (nível do meio)  →  Congregação
 | `AREA` | número | nenhum (subdivisão implícita) | Área 40 → Acampamento 2 |
 
 - Tabelas: `agrupamento` (`id`, `tipo`, `nome`, `numero`, `pais`, `ativo`), `subdivisao` (`id`, `agrupamento_id`, `numero`, `nome`, `ativo`),
-  `congregacao.subdivisao_id` NOT NULL. O **tipo** é enum fixo no código; as **instâncias** são linhas criadas pelo sistema
-  (o front lista o enum, mas quem cria agrupamentos/subdivisões são os usuários autorizados).
-- Para o tipo `AREA`, ao criar o agrupamento o sistema cria automaticamente uma única subdivisão implícita (sem número/nome),
-  para a congregação sempre apontar para `subdivisao`.
+  `congregacao.subdivisao_id` NOT NULL (`UNIQUE (subdivisao_id, nome)`). O **tipo** é enum fixo no código (`TipoAgrupamento`); as
+  **instâncias** são linhas criadas pelo sistema. Pacote `agrupamento` (controllers `/agrupamentos` e `/agrupamentos/{id}/subdivisoes`).
+- **As 74 áreas já vêm no banco** (seed da `V28`, cada uma com a subdivisão implícita). Acrescentar ou retirar área, setor, filial ou
+  campo é **pela API** (`AGRUPAMENTO_GERENCIAR`, hoje só `ADMIN` e `PASTOR_ADMIN`), nunca por migration; retirar é `ativo = false`, e só se
+  não houver congregação ativa nele. O nome antigo das áreas ("Área 40") sumiu: o tipo `AREA` só tem número.
+- Para o tipo `AREA`, ao criar o agrupamento o sistema cria automaticamente uma única subdivisão implícita (sem número/nome), para a
+  congregação sempre apontar para `subdivisao`; ninguém cria nem altera essa subdivisão à mão.
 - Números se repetem entre agrupamentos (Área 3 do setor ≠ Área 3 da filial): `numero` só é único **dentro do agrupamento**
   (`UNIQUE (agrupamento_id, numero)`). Número de setor único entre setores; número de agrupamento `AREA` único entre os `AREA`.
-- Um agrupamento nunca enxerga/acessa dados de outro: o isolamento vem do vínculo de escopo do usuário.
-- Validação de campos obrigatórios por tipo é regra de negócio da camada `Service` (complementada por constraints).
+- Campos obrigatórios por tipo são regra do `Service` (complementada por `CHECK`); campo que não pertence ao tipo é recusado (400),
+  e o tipo de um agrupamento não muda depois de criado.
+- Fluxo do formulário de cadastro: lista o enum de tipos → `GET /agrupamentos?tipo=` → `GET /agrupamentos/{id}/subdivisoes` (pula no tipo
+  `AREA`) → nome da congregação. Esses `GET` são **públicos**, como `GET /congregacoes`.
+- Contrato da API que mudou: `areaId` virou `subdivisaoId` no cadastro de congregação; `area` virou `agrupamento` + `subdivisao` nas
+  respostas de congregação e pessoa; filtros `areaId` viraram `agrupamentoId`/`subdivisaoId`; `/areas` deixou de existir.
+- Pendências: mapa das congregações da área no dashboard do pastor (precisa de latitude/longitude em `congregacao`), trilha de
+  auditoria da leitura do `PASTOR_ADMIN` sobre dados de menores (LGPD) e o escopo do endereço de congregação.
 
-**Escopo do usuário (revisa a seção "Escopo de acesso por Área" abaixo):** o vínculo é com o **agrupamento**
-(tabela de junção `usuario_agrupamento`, não `usuario_area`). `ADMIN`: global. `PASTOR`: até **2 agrupamentos**, de quaisquer tipos
-(ex.: filial + setor, setor + área) — **exceção:** se um dos vínculos é `CAMPO_MISSIONARIO`, o pastor fica **apenas** nele.
-Demais roles: exatamente 1 agrupamento. Quantidade máxima é regra do `Service`, não constraint de banco.
+**Escopo do usuário (implementado):** o vínculo é com o **agrupamento** (tabela `usuario_agrupamento`, com `vinculado_por` na trilha).
+`ADMIN` e `PASTOR_ADMIN`: **globais**, sem vínculo. `PASTOR`: até **2 agrupamentos**, de quaisquer tipos — **exceção:** se um dos
+vínculos é `CAMPO_MISSIONARIO`, o pastor fica **apenas** nele; pode ficar com 0 (sem acesso a nada) e é sempre designado
+(`PUT /usuarios/{id}/agrupamentos`, permissão `ESCOPO_GERENCIAR`). Demais roles: exatamente 1, herdado da congregação da pessoa ao criar
+o login (auto-cadastro incluso) e mudável pelo mesmo endpoint. Quantidade máxima é regra do `EscopoService`, não constraint de banco;
+trocar o papel é barrado (409) se o usuário já tiver mais vínculos do que o novo papel permite, e quem vira global perde os vínculos.
+
+**`PASTOR_ADMIN` (pastor geral):** global e **somente leitura nos dados** de pessoas e coristas (`PESSOA_LER`, `CORISTA_LER`,
+`DASHBOARD_LER`). Gerencia a estrutura (`AGRUPAMENTO_GERENCIAR`), o escopo dos pastores (`ESCOPO_GERENCIAR`) e logins
+(`USUARIO_GERENCIAR`), mas só concede o papel `PASTOR`. Não tem `CONGREGACAO_GERENCIAR`, para não mexer sem o pastor da área saber, e
+suas permissões **não são editáveis** pela API (como o `ADMIN`). Só o `ADMIN` concede `ADMIN`/`PASTOR_ADMIN` e altera quem os tem.
 
 ## Comandos
 
@@ -98,7 +115,7 @@ docker compose up -d
 - Lombok para reduzir boilerplate (getters/setters, builders)
 - DTOs como Records quando possível
 - Uso de `Optional<T>` para retornos que podem ser nulos — evitar retorno de `null` direto
-- Entidades: `Area`, `Congregacao`, `Pessoa`, `Corista`, `Endereco`, `Telefone`, `Evento`, `Usuario`, `Role`
+- Entidades: `Agrupamento`, `Subdivisao`, `Congregacao`, `Pessoa`, `Corista`, `Endereco`, `Telefone`, `Evento`, `Usuario`, `Role`
 - Tabela de usuários nomeada `usuario` (não `user`) para evitar conflito com palavra reservada no PostgreSQL
 - IDs em `UUID` (`gen_random_uuid()`), padrão adotado nas migrations
 
@@ -116,37 +133,40 @@ docker compose up -d
     - Jovens: `LIDERANCA_GRUPO_JOVEM` e `DIRIGENTE_CAMPANHA`.
     - Na prática, qualquer papel de liderança pode aprovar/reprovar (`LIDER_MOCIDADE`/`LIDER_JOVENS`/`LIDER_ADOLESCENTES` inclusos) — a validação de **qual líder pode aprovar o quê** é feita pelo recorte de acesso (`RecorteDeAcesso`: papel → lista adolescentes/jovens) nos endpoints de `/coristas`; quem aprovou vem do usuário logado. Em `/pessoas/{id}/aprovar` basta a permissão `PESSOA_APROVAR` (só `LIDER_MOCIDADE`, `PASTOR` e `ADMIN`).
     - `PRESBITERO` deixou de aprovar/reprovar por padrão: hoje é só acesso a dashboards (mesma lógica de "pode ou não aprovar" fica a critério de cada liderança, não dele).
-- **Regras de escopo do RBAC** (nomes conforme `V7__role_table.sql`/`V13__novos_roles_aprovacao.sql` — ver também a seção "Escopo de acesso por Área" abaixo):
+- **Regras de escopo do RBAC** (nomes conforme `V7__role_table.sql`/`V13__novos_roles_aprovacao.sql`/`V31`; o vínculo geográfico é sempre com o **agrupamento** — ver a seção "Escopo de acesso" abaixo):
     - `ADMIN`: global
-    - `PASTOR`: área (leitura geral)
+    - `PASTOR_ADMIN`: global, somente leitura nos dados; gerencia agrupamentos, subdivisões e o escopo dos pastores
+    - `PASTOR`: até 2 agrupamentos (leitura geral deles; campo missionário fica sozinho)
     - `PRESBITERO`: congregação (dashboards; não aprova/reprova por padrão — ver acima)
-    - `LIDER_MOCIDADE` / `LIDER_JOVENS` / `LIDER_ADOLESCENTES`: área, com restrições ao recorte da mocidade
-    - `DIRIGENTE_UNIAO`: área; aprova/reprova cadastro de adolescentes
-    - `LIDERANCA_GRUPO_JOVEM` / `DIRIGENTE_CAMPANHA`: área; aprovam/reprovam cadastro de jovens
+    - `LIDER_MOCIDADE` / `LIDER_JOVENS` / `LIDER_ADOLESCENTES`: o seu agrupamento, com restrições ao recorte da mocidade
+    - `DIRIGENTE_UNIAO`: o seu agrupamento; aprova/reprova cadastro de adolescentes
+    - `LIDERANCA_GRUPO_JOVEM` / `DIRIGENTE_CAMPANHA`: o seu agrupamento; aprovam/reprovam cadastro de jovens
     - `MAESTRO_ADOLESCENTES` / `MAESTRO_JOVENS`: restrito ao seu recorte
     - `APOIO_ADOLESCENTES` / `APOIO_JOVENS`: acesso operacional limitado ao seu recorte
     - `CORISTA_ADOLESCENTES` / `CORISTA_JOVENS`: apenas o próprio perfil + ver eventos do seu escopo
 - **LGPD:** cadastro de menores exige responsável legal (nome + telefone) + consentimento explícito + trilha de aprovação/alteração.
 
-### Escopo de acesso por Área (RBAC) — decidido em 2026-08-30, **escopo geográfico ainda pendente**
+### Escopo de acesso (RBAC) por agrupamento — implementado em 2026-10-11
 
-A autenticação/autorização por permissão **já existe** (ver "Segurança"). O que segue — o vínculo do usuário com área — **ainda não foi implementado**, e foi revisado pela seção "Hierarquia Organizacional" acima (o vínculo passa a ser com o **agrupamento**, tabela `usuario_agrupamento`).
+A autenticação, a autorização por permissão e o escopo geográfico **já existem** (ver "Segurança" e "Hierarquia Organizacional").
 
-**Roles** (`V7__role_table.sql` + `V13__novos_roles_aprovacao.sql`, tabela `role`): `ADMIN`, `PASTOR`, `PRESBITERO`, `LIDER_MOCIDADE`, `LIDER_JOVENS`, `LIDER_ADOLESCENTES`, `DIRIGENTE_UNIAO`, `LIDERANCA_GRUPO_JOVEM`, `DIRIGENTE_CAMPANHA`, `APOIO_ADOLESCENTES`, `APOIO_JOVENS`, `MAESTRO_ADOLESCENTES`, `MAESTRO_JOVENS`, `CORISTA_ADOLESCENTES`, `CORISTA_JOVENS`.
+**Roles** (`V7`, `V13` e `V31`, tabela `role`): `ADMIN`, `PASTOR_ADMIN`, `PASTOR`, `PRESBITERO`, `LIDER_MOCIDADE`, `LIDER_JOVENS`,
+`LIDER_ADOLESCENTES`, `DIRIGENTE_UNIAO`, `LIDERANCA_GRUPO_JOVEM`, `DIRIGENTE_CAMPANHA`, `APOIO_ADOLESCENTES`, `APOIO_JOVENS`,
+`MAESTRO_ADOLESCENTES`, `MAESTRO_JOVENS`, `CORISTA_ADOLESCENTES`, `CORISTA_JOVENS`.
 
-> Nomenclatura padronizada em 2026-09-25: a seção "Regras de escopo do RBAC" (acima) usava nomes antigos (`RESP_MOCIDADE`, `RESP_JOVEM`, `RESP_ADOLESCENTE`, `MAESTRO`, `APOIO`, `CORISTA`) — já atualizada para usar exatamente estes nomes seedados no banco. Mesma padronização aplicada em `ListaClassificacao` (Javadoc), `StatusPessoa` (Javadoc) e `README.md`.
+> Nomenclatura padronizada em 2026-09-25: os nomes acima são exatamente os seedados no banco (antes havia `RESP_MOCIDADE`, `RESP_JOVEM`,
+> `RESP_ADOLESCENTE`, `MAESTRO`, `APOIO`, `CORISTA`).
 
-**Regra de escopo por Área (nova, definida nesta sessão):**
-- `ADMIN`: acesso global a todas as áreas — bypass total, não precisa de vínculo de área.
-- `PASTOR`: pode ser designado a **até 2 áreas**.
-- Todas as demais roles (`LIDER_MOCIDADE` para baixo — líderes, apoio, maestros, coristas): designadas a **exatamente 1 área**.
-- Motivação: dashboards futuros (ex.: "quantos jovens ao todo", "quantos por área", "quantos por congregação") dependem desse vínculo para filtrar o que cada usuário pode ver — `ADMIN` vê tudo, os demais só o recorte da(s) sua(s) área(s).
-
-**Modelo de dados recomendado (ainda não criado):** uma tabela de junção `usuario_area` (many-to-many entre `Usuario` e `Area`), e não uma coluna `area_id` direto em `Usuario` — porque `PASTOR` pode ter 2 áreas, o que uma coluna única não suporta. A validação de quantidade máxima (1 para a maioria, 2 para `PASTOR`, nenhuma exigida para `ADMIN`) é regra de negócio da camada `Service`, não constraint de banco.
-
-**Quando o escopo geográfico for implementado:**
-1. (feito) Login + JWT e filtro que extrai o usuário autenticado.
-2. Toda consulta que lista/filtra por área (ou por congregação, para roles com esse recorte — ver seção acima) deve aplicar o vínculo de `user_area` do usuário autenticado, exceto `ADMIN`.
+**Como o escopo é aplicado** (`EscopoDeAcesso`, em `usuario/service`, sempre no backend):
+- `ADMIN` e `PASTOR_ADMIN` não são restringidos; os demais só enxergam o que pertence aos agrupamentos do `usuario_agrupamento`. Sem
+  usuário autenticado, ou sem vínculo, não se enxerga nada (**falha fechada**).
+- É uma camada a mais sobre a permissão (*o que* se pode fazer) e o recorte por lista do `RecorteDeAcesso` (*sobre quem*): o escopo diz *onde*.
+- **404** (não revela que existe) em pessoa, corista, telefone, endereço de pessoa, fila de afastamento e login (`/usuarios`) fora do escopo;
+  as listagens já vêm filtradas, e o filtro do cliente (`agrupamentoId`...) só reduz, nunca amplia. **403** na escrita de congregação
+  (criar, editar, mover, inativar, reativar) fora do escopo, porque congregações são públicas. Mover uma pessoa só para congregação do
+  próprio escopo.
+- Quem já tinha login antes disso recebeu o vínculo pela `V32` (agrupamento da congregação da própria pessoa).
+- Todo recurso novo que guarda dado de pessoa deve passar por `EscopoDeAcesso` (`restringirA` nas consultas, `fora(...)` nos acessos por id).
 
 Qualquer mudança nesses pontos exige confirmação explícita do responsável pelo projeto antes da implementação.
 
@@ -162,7 +182,7 @@ Qualquer mudança nesses pontos exige confirmação explícita do responsável p
   usuario_role · V16 status AFASTADO · V17 permissao/role_permissao · V18 permissão de aprovar afastamento ·
   V19 trilha de afastamento · V20 historico_status_pessoa · V21 corista só vê o próprio cadastro · V22 permissão de
   corrigir nascimento · V23 bloqueio de login + redefinição de senha · V24 edição de contato · V25 desligamento de
-  corista · V26 solicitação de papel · V27 solicitação de afastamento (próxima: V28 — hierarquia organizacional)
+  corista · V26 solicitação de papel · V27 solicitação de afastamento · V28 agrupamento/subdivisão, seed das 74 áreas e backfill das congregações · V29 permissão `AGRUPAMENTO_GERENCIAR` · V30 congregação só por subdivisão (remove `area` e `AREA_GERENCIAR`) · V31 `usuario_agrupamento`, `ESCOPO_GERENCIAR` e papel `PASTOR_ADMIN` · V32 escopo para quem já tinha login (próxima: V33)
 
 ## Segurança (implementada em 2026-10-10)
 
@@ -184,11 +204,16 @@ Autenticação **stateless por JWT** + autorização por **permissão lida do ba
   pelo PASTOR em `PUT /roles/{id}/permissoes`; o `ADMIN` não é editável pela API). Papel é só um agrupador de permissões.
   A matriz endpoint × permissão é conferida por `AutorizacaoEndpointsIntegracaoTest`: **todo endpoint novo entra nessa matriz**.
 - **Público (sem login):** `POST /auth/login`, `POST /auth/redefinicao-senha/**`, `POST /coristas` (auto-cadastro), `GET /congregacoes`
-  e `/congregacoes/{id}` (o formulário lista as congregações), Swagger (desligado em prod) e `/error`. O resto exige token.
+  e `/congregacoes/{id}`, `GET /agrupamentos/**` (o formulário lista tipo → agrupamento → subdivisão → congregação), Swagger
+  (desligado em prod) e `/error`. O resto exige token.
 - **Recorte contextual** (no `Service`, não no controller): `RecorteDeAcesso` mapeia papel → listas (adolescentes e/ou jovens) que
   ele enxerga; papel fora do mapa só acessa o próprio cadastro. Fora do recorte a resposta é **404** (não revela que existe).
   Presbítero vê as duas listas, só da própria congregação. Corista só vê/edita o **próprio** cadastro (e só se tiver papel
   `CORISTA_*`). `aprovadoPor`/`reprovadoPor`/`afastadoPor`/`retornadoPor`/`promovidoPor` vêm do usuário logado, nunca do cliente.
+- **Escopo por agrupamento** (`EscopoDeAcesso`, ver "Escopo de acesso"): vale sobre o recorte acima, em pessoa, corista, telefone,
+  endereço, afastamento, usuários e escrita de congregação. Teste de ponta a ponta: `IsolamentoPorAgrupamentoIntegracaoTest`.
+- **Papéis globais:** só o `ADMIN` concede `ADMIN`/`PASTOR_ADMIN` e altera quem os tem; o `PASTOR_ADMIN` só concede `PASTOR`. Permissões
+  de `ADMIN` e `PASTOR_ADMIN` não são editáveis em `PUT /roles/{id}/permissoes`.
 - **Regras decididas:** a data de nascimento só o líder corrige (`CORISTA_CORRIGIR_NASCIMENTO`; o corista não altera a própria);
   o corista edita o próprio telefone/endereço no máximo **1 vez a cada 10 dias** (telefone e endereço contam separado; líderes
   não são limitados); **nenhum corista é líder**: papel `CORISTA_*` não convive com outro papel e, ao receber um papel de liderança,
@@ -199,8 +224,12 @@ Autenticação **stateless por JWT** + autorização por **permissão lida do ba
   `PENDENTE` e inativo) e `ROLE_APROVAR` decide.
 - **Testes de segurança:** `@WithUsuarioTeste` (pacote `suporte`) autentica como um `Usuario` real; os testes de controller importam
   `SegurancaTesteConfig`.
-- **Pendências conhecidas:** escopo por agrupamento/área (vem com a hierarquia nova); limite de tentativas no `POST /coristas` público;
-  CORS; botão de Bearer no Swagger.
+- **Testes:** os que chamam um service direto depois de uma requisição `MockMvc` precisam repor o contexto de segurança (o `MockMvc`
+  limpa ao fim de cada requisição) e o service falha fechado sem usuário; usuários falsos de teste não têm vínculo no banco (ver
+  `SolicitacaoAfastamentoIntegracaoTest`). Helper de hierarquia: `suporte/HierarquiaTeste`.
+- **Pendências conhecidas:** limite de tentativas no `POST /coristas` público; CORS; botão de Bearer no Swagger; auditoria de leitura do
+  `PASTOR_ADMIN` (LGPD); escopo do endereço de congregação; um corista ainda pode trocar a própria congregação dentro do mesmo
+  agrupamento; o `PASTOR` herda todas as permissões antigas (inclusive `ROLE_GERENCIAR_PERMISSOES`, com que pode se dar poderes).
 
 ## Observabilidade
 

@@ -8,7 +8,8 @@ import java.util.UUID;
 /** Filtros opcionais da listagem (query params); todos {@code null} lista tudo. {@code nome} busca por trecho. */
 public record CoristaFiltro(
         String nome,
-        UUID areaId,
+        UUID agrupamentoId,
+        UUID subdivisaoId,
         UUID congregacaoId,
         ListaClassificacao listaClassificacao,
         StatusPessoa status

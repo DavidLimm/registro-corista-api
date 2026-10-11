@@ -1,11 +1,14 @@
 package com.registraai.registro_coristas_api.afastamento;
 
 import com.registraai.registro_coristas_api.suporte.UsuarioTesteFactory;
+import com.registraai.registro_coristas_api.suporte.HierarquiaTeste;
+import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.web.servlet.MockMvc;
@@ -19,6 +22,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -42,6 +46,9 @@ class SolicitacaoAfastamentoIntegracaoTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private JdbcTemplate jdbc;
+
     private final JsonMapper json = JsonMapper.builder().build();
 
     private static RequestPostProcessor admin() {
@@ -62,15 +69,36 @@ class SolicitacaoAfastamentoIntegracaoTest {
     }
 
     private String criarCongregacao(int numeroDaArea) throws Exception {
-        String areaLocation = mockMvc.perform(post("/v1/api/areas").with(admin()).contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"numero\": %d, \"nome\": \"Área %d\" }".formatted(numeroDaArea, numeroDaArea)))
-                .andExpect(status().isCreated()).andReturn().getResponse().getHeader("Location");
+        String filial = HierarquiaTeste.criarFilial(mockMvc, admin());
+        String subdivisaoId = HierarquiaTeste.criarSubdivisaoEm(mockMvc, admin(), filial, 1);
         String congregacaoLocation = mockMvc.perform(post("/v1/api/congregacoes").with(admin())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"areaId\": \"%s\", \"nome\": \"Sede %d\" }"
-                                .formatted(idDoLocation(areaLocation), numeroDaArea)))
+                        .content("{ \"subdivisaoId\": \"%s\", \"nome\": \"Sede %d\" }"
+                                .formatted(subdivisaoId, numeroDaArea)))
                 .andExpect(status().isCreated()).andReturn().getResponse().getHeader("Location");
-        return idDoLocation(congregacaoLocation);
+        String congregacaoId = idDoLocation(congregacaoLocation);
+        darEscopoAosLideres(congregacaoId, idDoLocation(filial));
+        return congregacaoId;
+    }
+
+    /**
+     * Os líderes deste teste são usuários falsos (todos com o mesmo id). O escopo vem do banco, então eles precisam de
+     * um {@code usuario} real com esse id e de um vínculo com o agrupamento da congregação do teste.
+     */
+    private void darEscopoAosLideres(String congregacaoId, String agrupamentoId) throws Exception {
+        UUID id = UUID.fromString(WithUsuarioTeste.ID_PADRAO);
+        Integer existe = jdbc.queryForObject("SELECT count(*) FROM usuario WHERE id = ?", Integer.class, id);
+        if (existe == null || existe == 0) {
+            String pessoaId = idDoLocation(mockMvc.perform(post("/v1/api/pessoas").with(admin())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{ \"nome\": \"Líderes de teste\", \"dataNascimento\": \"%s\", \"congregacaoId\": \"%s\" }"
+                                    .formatted(NASCIMENTO, congregacaoId)))
+                    .andExpect(status().isCreated()).andReturn().getResponse().getHeader("Location"));
+            jdbc.update("INSERT INTO usuario (id, pessoa_id, email, senha_hash) VALUES (?, ?, 'lideres.teste@exemplo.com', 'hash')",
+                    id, UUID.fromString(pessoaId));
+        }
+        jdbc.update("DELETE FROM usuario_agrupamento WHERE usuario_id = ?", id);
+        jdbc.update("INSERT INTO usuario_agrupamento (usuario_id, agrupamento_id) VALUES (?, ?)", id, UUID.fromString(agrupamentoId));
     }
 
     /** Auto-cadastra e aprova um corista jovem; devolve o id do corista. */

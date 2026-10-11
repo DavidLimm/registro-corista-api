@@ -1,7 +1,8 @@
 package com.registraai.registro_coristas_api.congregacao;
 
-import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
 import com.jayway.jsonpath.JsonPath;
+import com.registraai.registro_coristas_api.suporte.HierarquiaTeste;
+import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -42,38 +43,35 @@ class CongregacaoIntegracaoTest {
             , "endereco": { "logradouro": "%s", "numero": "123", "bairro": "Boa Vista",
                             "cidade": "Recife", "uf": "pe", "cep": "50050-000" }""";
 
-    /** Cria uma área pela API e devolve o id dela. */
-    private String criarArea(int numero) throws Exception {
-        String location = mockMvc.perform(post("/v1/api/areas").contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"numero\": %d, \"nome\": \"Área %d\" }".formatted(numero, numero)))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getHeader("Location");
-        return location.substring(location.lastIndexOf('/') + 1);
+    /** Cria uma filial (nome único) com uma subdivisão pela API e devolve o id da subdivisão. */
+    private String criarSubdivisao() throws Exception {
+        return HierarquiaTeste.criarSubdivisao(mockMvc);
     }
 
-    private String corpo(String areaId, String nome, String enderecoJson) {
-        return "{ \"areaId\": \"%s\", \"nome\": \"%s\"%s }".formatted(areaId, nome, enderecoJson);
+    private String corpo(String subdivisaoId, String nome, String enderecoJson) {
+        return "{ \"subdivisaoId\": \"%s\", \"nome\": \"%s\"%s }".formatted(subdivisaoId, nome, enderecoJson);
     }
 
     /** Cria uma congregação sem endereço pela API e devolve o Location. */
-    private String criarCongregacao(String areaId, String nome) throws Exception {
+    private String criarCongregacao(String subdivisaoId, String nome) throws Exception {
         return mockMvc.perform(post("/v1/api/congregacoes").contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(areaId, nome, "")))
+                        .content(corpo(subdivisaoId, nome, "")))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getHeader("Location");
     }
 
     @Test
     void criarBuscarEAtualizar_gravaEnderecoAninhadoNormalizadoEMantemQuandoAusente() throws Exception {
-        String areaId = criarArea(1);
+        String subdivisaoId = criarSubdivisao();
 
         MvcResult criada = mockMvc.perform(post("/v1/api/congregacoes").contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(areaId, "  Sede  ", ENDERECO_JSON.formatted("Rua da Aurora"))))
+                        .content(corpo(subdivisaoId, "  Sede  ", ENDERECO_JSON.formatted("Rua da Aurora"))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.nome").value("Sede"))
                 .andExpect(jsonPath("$.ativa").value(true))
-                .andExpect(jsonPath("$.area.id").value(areaId))
-                .andExpect(jsonPath("$.area.numero").value(1))
+                .andExpect(jsonPath("$.subdivisao.id").value(subdivisaoId))
+                .andExpect(jsonPath("$.subdivisao.numero").value(1))
+                .andExpect(jsonPath("$.agrupamento.tipo").value("FILIAL"))
                 .andExpect(jsonPath("$.endereco.uf").value("PE"))
                 .andExpect(jsonPath("$.endereco.cep").value("50050000"))
                 .andReturn();
@@ -86,7 +84,7 @@ class CongregacaoIntegracaoTest {
 
         // editar com novo endereço atualiza o mesmo registro de endereço
         mockMvc.perform(put(location).contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(areaId, "Sede Renomeada", ENDERECO_JSON.formatted("Rua Nova"))))
+                        .content(corpo(subdivisaoId, "Sede Renomeada", ENDERECO_JSON.formatted("Rua Nova"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nome").value("Sede Renomeada"))
                 .andExpect(jsonPath("$.endereco.id").value(enderecoId))
@@ -94,7 +92,7 @@ class CongregacaoIntegracaoTest {
 
         // editar sem endereço no corpo mantém o atual
         mockMvc.perform(put(location).contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(areaId, "Sede Renomeada 2", "")))
+                        .content(corpo(subdivisaoId, "Sede Renomeada 2", "")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nome").value("Sede Renomeada 2"))
                 .andExpect(jsonPath("$.endereco.id").value(enderecoId))
@@ -102,47 +100,74 @@ class CongregacaoIntegracaoTest {
     }
 
     @Test
+    void congregacaoNaAreaSemeada_usaASubdivisaoImplicita() throws Exception {
+        // o formulário: tipo AREA → escolhe a Área 40 entre as 74 → (subdivisão implícita) → nome da congregação
+        String agrupamentos = mockMvc.perform(get("/v1/api/agrupamentos").param("tipo", "AREA"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String area40Id = JsonPath.<java.util.List<String>>read(agrupamentos, "$[?(@.numero==40)].id").get(0);
+        String subdivisoes = mockMvc.perform(get("/v1/api/agrupamentos/" + area40Id + "/subdivisoes"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String subdivisaoId = JsonPath.read(subdivisoes, "$[0].id");
+
+        mockMvc.perform(post("/v1/api/congregacoes").contentType(MediaType.APPLICATION_JSON)
+                        .content(corpo(subdivisaoId, "Acampamento 2 (teste)", "")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.agrupamento.tipo").value("AREA"))
+                .andExpect(jsonPath("$.agrupamento.numero").value(40))
+                .andExpect(jsonPath("$.agrupamento.id").value(area40Id));
+    }
+
+    @Test
     void editarCongregacaoSemEnderecoComEnderecoNoCorpo_criaEVincula() throws Exception {
-        String areaId = criarArea(2);
-        String location = criarCongregacao(areaId, "Sem endereço");
+        String subdivisaoId = criarSubdivisao();
+        String location = criarCongregacao(subdivisaoId, "Sem endereço");
 
         mockMvc.perform(get(location)).andExpect(jsonPath("$.endereco").doesNotExist());
 
         mockMvc.perform(put(location).contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(areaId, "Sem endereço", ENDERECO_JSON.formatted("Rua Criada"))))
+                        .content(corpo(subdivisaoId, "Sem endereço", ENDERECO_JSON.formatted("Rua Criada"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.endereco.logradouro").value("Rua Criada"));
     }
 
     @Test
-    void nomeDuplicado_naMesmaAreaDa409SemDiferenciarMaiusculasEEmOutraAreaPermite() throws Exception {
-        String areaA = criarArea(3);
-        String areaB = criarArea(4);
-        String location = criarCongregacao(areaA, "Sede");
+    void nomeDuplicado_naMesmaSubdivisaoDa409SemDiferenciarMaiusculasEEmOutraPermite() throws Exception {
+        String subdivisaoA = criarSubdivisao();
+        String subdivisaoB = criarSubdivisao();
+        String location = criarCongregacao(subdivisaoA, "Sede");
 
         mockMvc.perform(post("/v1/api/congregacoes").contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(areaA, "SEDE", "")))
+                        .content(corpo(subdivisaoA, "SEDE", "")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value(containsString("Já existe uma congregação chamada")));
 
-        // mesmo nome em outra área é permitido
-        criarCongregacao(areaB, "Sede");
+        // mesmo nome em outra subdivisão é permitido
+        criarCongregacao(subdivisaoB, "Sede");
 
         // regravar o próprio nome não é conflito
         mockMvc.perform(put(location).contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(areaA, "Sede", "")))
+                        .content(corpo(subdivisaoA, "Sede", "")))
                 .andExpect(status().isOk());
     }
 
     @Test
-    void criar_emAreaInativa_retorna409EEmAreaInexistente_retorna404() throws Exception {
-        String areaId = criarArea(5);
-        mockMvc.perform(delete("/v1/api/areas/" + areaId)).andExpect(status().isNoContent());
+    void criar_emSubdivisaoOuAgrupamentoInativo_retorna409EEmSubdivisaoInexistente_retorna404() throws Exception {
+        String filial = HierarquiaTeste.criarFilial(mockMvc);
+        String subdivisaoId = HierarquiaTeste.criarSubdivisaoEm(mockMvc, filial, 1);
+        String outraSubdivisaoId = HierarquiaTeste.criarSubdivisaoEm(mockMvc, filial, 2);
 
+        // subdivisão inativa
+        mockMvc.perform(delete(filial + "/subdivisoes/" + subdivisaoId)).andExpect(status().isNoContent());
         mockMvc.perform(post("/v1/api/congregacoes").contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(areaId, "Sede", "")))
+                        .content(corpo(subdivisaoId, "Sede", "")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value(containsString("inativa")));
+
+        // agrupamento inativo (mesmo com a subdivisão ativa)
+        mockMvc.perform(delete(filial)).andExpect(status().isNoContent());
+        mockMvc.perform(post("/v1/api/congregacoes").contentType(MediaType.APPLICATION_JSON)
+                        .content(corpo(outraSubdivisaoId, "Sede", "")))
+                .andExpect(status().isConflict());
 
         mockMvc.perform(post("/v1/api/congregacoes").contentType(MediaType.APPLICATION_JSON)
                         .content(corpo("00000000-0000-0000-0000-000000000000", "Sede", "")))
@@ -150,91 +175,102 @@ class CongregacaoIntegracaoTest {
     }
 
     @Test
-    void remanejar_liberaAInativacaoDaAreaDeOrigem() throws Exception {
-        String origem = criarArea(6);
-        String destino = criarArea(7);
-        String location = criarCongregacao(origem, "Sede da Área 6");
+    void remanejar_liberaAInativacaoDaSubdivisaoDeOrigem() throws Exception {
+        String filial = HierarquiaTeste.criarFilial(mockMvc);
+        String origem = HierarquiaTeste.criarSubdivisaoEm(mockMvc, filial, 1);
+        String destino = HierarquiaTeste.criarSubdivisaoEm(mockMvc, filial, 2);
+        String location = criarCongregacao(origem, "Sede da Área 1");
 
-        // área com congregação ativa não pode ser inativada
-        mockMvc.perform(delete("/v1/api/areas/" + origem)).andExpect(status().isConflict());
+        // subdivisão e agrupamento com congregação ativa não podem ser inativados
+        mockMvc.perform(delete(filial + "/subdivisoes/" + origem)).andExpect(status().isConflict());
+        mockMvc.perform(delete(filial)).andExpect(status().isConflict());
 
-        // remanejar = editar a congregação apontando para outra área ativa
+        // remanejar = editar a congregação apontando para outra subdivisão ativa
         mockMvc.perform(put(location).contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(destino, "Sede da Área 6", "")))
+                        .content(corpo(destino, "Sede da Área 1", "")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.area.id").value(destino))
-                .andExpect(jsonPath("$.area.numero").value(7));
+                .andExpect(jsonPath("$.subdivisao.id").value(destino))
+                .andExpect(jsonPath("$.subdivisao.numero").value(2));
 
-        mockMvc.perform(delete("/v1/api/areas/" + origem)).andExpect(status().isNoContent());
-        // e a área que recebeu a congregação passa a ser a bloqueada
-        mockMvc.perform(delete("/v1/api/areas/" + destino)).andExpect(status().isConflict());
+        mockMvc.perform(delete(filial + "/subdivisoes/" + origem)).andExpect(status().isNoContent());
+        // e a subdivisão que recebeu a congregação passa a ser a bloqueada
+        mockMvc.perform(delete(filial + "/subdivisoes/" + destino)).andExpect(status().isConflict());
 
-        // não é possível remanejar de volta para a área agora inativa
+        // não é possível remanejar de volta para a subdivisão agora inativa
         mockMvc.perform(put(location).contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(origem, "Sede da Área 6", "")))
+                        .content(corpo(origem, "Sede da Área 1", "")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value(containsString("inativa")));
-        mockMvc.perform(get(location)).andExpect(jsonPath("$.area.id").value(destino));
+        mockMvc.perform(get(location)).andExpect(jsonPath("$.subdivisao.id").value(destino));
     }
 
     @Test
-    void remanejar_paraAreaOndeOMesmoNomeJaExiste_retorna409() throws Exception {
-        String areaA = criarArea(8);
-        String areaB = criarArea(9);
-        String location = criarCongregacao(areaA, "Sede");
-        criarCongregacao(areaB, "Sede");
+    void remanejar_paraSubdivisaoOndeOMesmoNomeJaExiste_retorna409() throws Exception {
+        String subdivisaoA = criarSubdivisao();
+        String subdivisaoB = criarSubdivisao();
+        String location = criarCongregacao(subdivisaoA, "Sede");
+        criarCongregacao(subdivisaoB, "Sede");
 
         mockMvc.perform(put(location).contentType(MediaType.APPLICATION_JSON)
-                        .content(corpo(areaB, "Sede", "")))
+                        .content(corpo(subdivisaoB, "Sede", "")))
                 .andExpect(status().isConflict());
     }
 
     @Test
-    void inativarEReativar_eReativarExigeAreaAtiva() throws Exception {
-        String areaId = criarArea(10);
-        String location = criarCongregacao(areaId, "Sede");
+    void inativarEReativar_eReativarExigeSubdivisaoEAgrupamentoAtivos() throws Exception {
+        String filial = HierarquiaTeste.criarFilial(mockMvc);
+        String subdivisaoId = HierarquiaTeste.criarSubdivisaoEm(mockMvc, filial, 1);
+        String location = criarCongregacao(subdivisaoId, "Sede");
 
         mockMvc.perform(delete(location)).andExpect(status().isNoContent());
         mockMvc.perform(get(location))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ativa").value(false));
 
-        // congregação inativa não bloqueia a inativação da área
-        mockMvc.perform(delete("/v1/api/areas/" + areaId)).andExpect(status().isNoContent());
+        // congregação inativa não bloqueia a inativação do agrupamento
+        mockMvc.perform(delete(filial)).andExpect(status().isNoContent());
 
-        // mas não dá para reativar a congregação enquanto a área estiver inativa
+        // mas não dá para reativar a congregação enquanto o agrupamento estiver inativo
         mockMvc.perform(patch(location + "/reativar"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value(containsString("inativa")));
 
-        mockMvc.perform(patch("/v1/api/areas/" + areaId + "/reativar")).andExpect(status().isOk());
+        mockMvc.perform(patch(filial + "/reativar")).andExpect(status().isOk());
         mockMvc.perform(patch(location + "/reativar"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ativa").value(true));
     }
 
     @Test
-    void listar_filtraPorAreaESituacaoOrdenandoPorNome() throws Exception {
-        String areaId = criarArea(11);
-        String outraArea = criarArea(12);
-        criarCongregacao(areaId, "Bairro Novo");
-        String fechada = criarCongregacao(areaId, "Antiga");
-        criarCongregacao(areaId, "Centro");
-        criarCongregacao(outraArea, "De outra área");
+    void listar_filtraPorAgrupamentoSubdivisaoESituacaoOrdenandoPorNome() throws Exception {
+        String filial = HierarquiaTeste.criarFilial(mockMvc);
+        String filialId = HierarquiaTeste.idDoLocation(filial);
+        String subdivisaoId = HierarquiaTeste.criarSubdivisaoEm(mockMvc, filial, 1);
+        String segundaSubdivisao = HierarquiaTeste.criarSubdivisaoEm(mockMvc, filial, 2);
+        String outraSubdivisao = criarSubdivisao();
+        criarCongregacao(subdivisaoId, "Bairro Novo");
+        String fechada = criarCongregacao(subdivisaoId, "Antiga");
+        criarCongregacao(subdivisaoId, "Centro");
+        criarCongregacao(segundaSubdivisao, "Da segunda área");
+        criarCongregacao(outraSubdivisao, "De outro agrupamento");
         mockMvc.perform(delete(fechada)).andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/v1/api/congregacoes").param("areaId", areaId))
+        mockMvc.perform(get("/v1/api/congregacoes").param("subdivisaoId", subdivisaoId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(3))
                 .andExpect(jsonPath("$[0].nome").value("Antiga"))
                 .andExpect(jsonPath("$[1].nome").value("Bairro Novo"))
                 .andExpect(jsonPath("$[2].nome").value("Centro"));
 
-        mockMvc.perform(get("/v1/api/congregacoes").param("areaId", areaId).param("ativa", "true"))
+        // pelo agrupamento vêm as congregações de todas as subdivisões dele
+        mockMvc.perform(get("/v1/api/congregacoes").param("agrupamentoId", filialId))
+                .andExpect(jsonPath("$.length()").value(4));
+
+        mockMvc.perform(get("/v1/api/congregacoes").param("subdivisaoId", subdivisaoId).param("ativa", "true"))
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].nome").value("Bairro Novo"));
 
-        mockMvc.perform(get("/v1/api/congregacoes").param("areaId", areaId).param("ativa", "false"))
+        mockMvc.perform(get("/v1/api/congregacoes").param("subdivisaoId", subdivisaoId).param("ativa", "false"))
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].nome").value("Antiga"));
     }

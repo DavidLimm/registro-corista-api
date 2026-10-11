@@ -4,7 +4,8 @@ import com.registraai.registro_coristas_api.corista.exception.PromocaoInvalidaEx
 import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
 import com.registraai.registro_coristas_api.suporte.SegurancaTesteConfig;
 import org.springframework.context.annotation.Import;
-import com.registraai.registro_coristas_api.area.model.Area;
+import com.registraai.registro_coristas_api.agrupamento.model.Subdivisao;
+import com.registraai.registro_coristas_api.suporte.HierarquiaTeste;
 import com.registraai.registro_coristas_api.congregacao.exception.CongregacaoInativaException;
 import com.registraai.registro_coristas_api.congregacao.exception.CongregacaoNaoEncontradaException;
 import com.registraai.registro_coristas_api.congregacao.model.Congregacao;
@@ -69,7 +70,7 @@ class CoristaControllerTest {
     }
 
     private static final UUID CONGREGACAO_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
-    private static final UUID AREA_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID SUBDIVISAO_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
     private static final String JSON_VALIDO = """
             {
@@ -93,8 +94,8 @@ class CoristaControllerTest {
 
     private Corista coristaPersistido(UUID id, LocalDate nascimento, ListaClassificacao lista) {
         Instant agora = Instant.parse("2026-09-20T12:00:00Z");
-        Area area = Area.builder().id(AREA_ID).numero(40).nome("Área 40").criadoEm(agora).atualizadoEm(agora).build();
-        Congregacao congregacao = Congregacao.builder().id(CONGREGACAO_ID).area(area).nome("Sede").build();
+        Subdivisao subdivisao = HierarquiaTeste.subdivisaoDaArea40(UUID.randomUUID(), SUBDIVISAO_ID);
+        Congregacao congregacao = Congregacao.builder().id(CONGREGACAO_ID).subdivisao(subdivisao).nome("Sede").build();
         Pessoa pessoa = Pessoa.builder()
                 .id(UUID.randomUUID()).nome("Maria da Silva").dataNascimento(nascimento)
                 .status(StatusPessoa.PENDENTE).congregacao(congregacao)
@@ -124,7 +125,7 @@ class CoristaControllerTest {
                 .andExpect(jsonPath("$.pessoa.idade").value(26))
                 .andExpect(jsonPath("$.pessoa.faixaEtaria").value("JOVEM"))
                 .andExpect(jsonPath("$.pessoa.congregacao.nome").value("Sede"))
-                .andExpect(jsonPath("$.pessoa.congregacao.area.numero").value(40))
+                .andExpect(jsonPath("$.pessoa.congregacao.agrupamento.numero").value(40))
                 .andExpect(jsonPath("$.pessoa.endereco").doesNotExist());
     }
 
@@ -280,12 +281,12 @@ class CoristaControllerTest {
         var pagina = new PageImpl<>(
                 List.of(coristaPersistido(id, LocalDate.of(2010, 3, 1), ListaClassificacao.ADOLESCENTE)),
                 PageRequest.of(1, 5), 11);
-        var filtro = new CoristaFiltro("mar", AREA_ID, CONGREGACAO_ID, ListaClassificacao.ADOLESCENTE, StatusPessoa.PENDENTE);
+        var filtro = new CoristaFiltro("mar", null, SUBDIVISAO_ID, CONGREGACAO_ID, ListaClassificacao.ADOLESCENTE, StatusPessoa.PENDENTE);
         when(coristaService.listar(filtro, 1, 5)).thenReturn(pagina);
 
         mockMvc.perform(get("/v1/api/coristas")
                         .param("nome", "mar")
-                        .param("areaId", AREA_ID.toString())
+                        .param("subdivisaoId", SUBDIVISAO_ID.toString())
                         .param("congregacaoId", CONGREGACAO_ID.toString())
                         .param("listaClassificacao", "ADOLESCENTE")
                         .param("status", "PENDENTE")
@@ -303,7 +304,7 @@ class CoristaControllerTest {
 
     @Test
     void listar_semParametros_usaPaginaZeroTamanhoVinteESemFiltros() throws Exception {
-        var semFiltro = new CoristaFiltro(null, null, null, null, null);
+        var semFiltro = new CoristaFiltro(null, null, null, null, null, null);
         when(coristaService.listar(semFiltro, 0, 20)).thenReturn(new PageImpl<>(List.of()));
 
         mockMvc.perform(get("/v1/api/coristas"))
@@ -319,7 +320,7 @@ class CoristaControllerTest {
         mockMvc.perform(get("/v1/api/coristas").param("size", "0")).andExpect(status().isBadRequest());
         mockMvc.perform(get("/v1/api/coristas").param("page", "-1")).andExpect(status().isBadRequest());
         mockMvc.perform(get("/v1/api/coristas").param("listaClassificacao", "NAO_EXISTE")).andExpect(status().isBadRequest());
-        mockMvc.perform(get("/v1/api/coristas").param("areaId", "nao-e-uuid")).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/v1/api/coristas").param("subdivisaoId", "nao-e-uuid")).andExpect(status().isBadRequest());
 
         verifyNoInteractions(coristaService);
     }

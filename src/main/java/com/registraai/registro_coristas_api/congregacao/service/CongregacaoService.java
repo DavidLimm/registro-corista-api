@@ -1,14 +1,15 @@
 package com.registraai.registro_coristas_api.congregacao.service;
 
-import com.registraai.registro_coristas_api.area.exception.AreaInativaException;
-import com.registraai.registro_coristas_api.area.model.Area;
-import com.registraai.registro_coristas_api.area.service.AreaService;
+import com.registraai.registro_coristas_api.agrupamento.exception.SubdivisaoInativaException;
+import com.registraai.registro_coristas_api.agrupamento.model.Subdivisao;
+import com.registraai.registro_coristas_api.agrupamento.service.SubdivisaoService;
 import com.registraai.registro_coristas_api.congregacao.dto.CongregacaoRequest;
 import com.registraai.registro_coristas_api.congregacao.exception.CongregacaoNaoEncontradaException;
 import com.registraai.registro_coristas_api.congregacao.exception.CongregacaoNomeDuplicadoException;
 import com.registraai.registro_coristas_api.congregacao.model.Congregacao;
 import com.registraai.registro_coristas_api.congregacao.repository.CongregacaoRepository;
 import com.registraai.registro_coristas_api.endereco.service.EnderecoService;
+import com.registraai.registro_coristas_api.usuario.service.EscopoDeAcesso;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -23,17 +24,20 @@ import java.util.UUID;
 public class CongregacaoService {
 
     private final CongregacaoRepository congregacaoRepository;
-    private final AreaService areaService;
+    private final SubdivisaoService subdivisaoService;
     private final EnderecoService enderecoService;
+    private final EscopoDeAcesso escopo;
 
     @Transactional
     public Congregacao criar(CongregacaoRequest request) {
-        Area area = buscarAreaAtiva(request.areaId());
+        Subdivisao subdivisao = subdivisaoService.buscarAtivaParaVinculo(request.subdivisaoId());
+        // cada pastor só cria congregação nos próprios agrupamentos
+        escopo.exigirDentro(subdivisao);
         String nome = request.nome().trim();
-        validarNomeDisponivel(area, nome, null);
+        validarNomeDisponivel(subdivisao, nome, null);
 
         Congregacao congregacao = new Congregacao();
-        congregacao.setArea(area);
+        congregacao.setSubdivisao(subdivisao);
         congregacao.setNome(nome);
         if (request.endereco() != null) {
             congregacao.setEndereco(enderecoService.criar(request.endereco()));
@@ -47,12 +51,19 @@ public class CongregacaoService {
                 .orElseThrow(() -> new CongregacaoNaoEncontradaException(id));
     }
 
-    /** @param areaId {@code null} não filtra por área. @param ativa {@code null} não filtra por situação. */
+    /**
+     * @param agrupamentoId {@code null} não filtra por agrupamento. @param subdivisaoId {@code null} não filtra por
+     *                      subdivisão. @param ativa {@code null} não filtra por situação.
+     */
     @Transactional(readOnly = true)
-    public List<Congregacao> listar(UUID areaId, Boolean ativa) {
+    public List<Congregacao> listar(UUID agrupamentoId, UUID subdivisaoId, Boolean ativa) {
         Specification<Congregacao> filtro = Specification.unrestricted();
-        if (areaId != null) {
-            filtro = filtro.and((root, query, cb) -> cb.equal(root.get("area").get("id"), areaId));
+        if (agrupamentoId != null) {
+            filtro = filtro.and((root, query, cb) ->
+                    cb.equal(root.get("subdivisao").get("agrupamento").get("id"), agrupamentoId));
+        }
+        if (subdivisaoId != null) {
+            filtro = filtro.and((root, query, cb) -> cb.equal(root.get("subdivisao").get("id"), subdivisaoId));
         }
         if (ativa != null) {
             filtro = filtro.and((root, query, cb) -> cb.equal(root.get("ativa"), ativa));
@@ -61,19 +72,23 @@ public class CongregacaoService {
     }
 
     /**
-     * Atualiza a congregação. Se {@code areaId} mudar, é um remanejamento: a área de destino precisa estar ativa.
-     * O endereço só é alterado quando enviado (atualiza o existente ou cria um, se ainda não houver).
+     * Atualiza a congregação. Se {@code subdivisaoId} mudar, é um remanejamento: a subdivisão de destino precisa
+     * estar ativa. O endereço só é alterado quando enviado (atualiza o existente ou cria um, se ainda não houver).
      */
     @Transactional
     public Congregacao atualizar(UUID id, CongregacaoRequest request) {
         Congregacao congregacao = buscarPorId(id);
-        boolean mesmaArea = congregacao.getArea().getId().equals(request.areaId());
-        // só exige área ativa quando está indo para uma área (senão renomear congregação inativa em área inativa falharia)
-        Area area = mesmaArea ? congregacao.getArea() : buscarAreaAtiva(request.areaId());
+        escopo.exigirDentro(congregacao);
+        boolean mesmaSubdivisao = congregacao.getSubdivisao().getId().equals(request.subdivisaoId());
+        // só exige subdivisão ativa quando está indo para outra (senão renomear congregação inativa em subdivisão inativa falharia)
+        Subdivisao subdivisao = mesmaSubdivisao
+                ? congregacao.getSubdivisao()
+                : subdivisaoService.buscarAtivaParaVinculo(request.subdivisaoId());
+        escopo.exigirDentro(subdivisao);
         String nome = request.nome().trim();
-        validarNomeDisponivel(area, nome, id);
+        validarNomeDisponivel(subdivisao, nome, id);
 
-        congregacao.setArea(area);
+        congregacao.setSubdivisao(subdivisao);
         congregacao.setNome(nome);
         if (request.endereco() != null) {
             if (congregacao.getEndereco() == null) {
@@ -89,36 +104,31 @@ public class CongregacaoService {
     @Transactional
     public void inativar(UUID id) {
         Congregacao congregacao = buscarPorId(id);
+        escopo.exigirDentro(congregacao);
         congregacao.setAtiva(false);
         congregacaoRepository.save(congregacao);
     }
 
-    /** Só reativa se a área da congregação estiver ativa (uma área inativa não pode ter congregação ativa). */
+    /** Só reativa se a subdivisão e o agrupamento dela estiverem ativos (inativo não pode ter congregação ativa). */
     @Transactional
     public Congregacao reativar(UUID id) {
         Congregacao congregacao = buscarPorId(id);
-        if (!congregacao.getArea().isAtiva()) {
-            throw new AreaInativaException(congregacao.getArea().getNumero());
+        escopo.exigirDentro(congregacao);
+        Subdivisao subdivisao = congregacao.getSubdivisao();
+        if (!subdivisao.isAtivo() || !subdivisao.getAgrupamento().isAtivo()) {
+            throw new SubdivisaoInativaException();
         }
         congregacao.setAtiva(true);
         return congregacaoRepository.save(congregacao);
     }
 
-    private Area buscarAreaAtiva(UUID areaId) {
-        Area area = areaService.buscarPorId(areaId);
-        if (!area.isAtiva()) {
-            throw new AreaInativaException(area.getNumero());
-        }
-        return area;
-    }
-
     /** @param idIgnorado congregação em edição (não conta como duplicada de si mesma); {@code null} na criação. */
-    private void validarNomeDisponivel(Area area, String nome, UUID idIgnorado) {
+    private void validarNomeDisponivel(Subdivisao subdivisao, String nome, UUID idIgnorado) {
         boolean duplicado = idIgnorado == null
-                ? congregacaoRepository.existsByAreaIdAndNomeIgnoreCase(area.getId(), nome)
-                : congregacaoRepository.existsByAreaIdAndNomeIgnoreCaseAndIdNot(area.getId(), nome, idIgnorado);
+                ? congregacaoRepository.existsBySubdivisaoIdAndNomeIgnoreCase(subdivisao.getId(), nome)
+                : congregacaoRepository.existsBySubdivisaoIdAndNomeIgnoreCaseAndIdNot(subdivisao.getId(), nome, idIgnorado);
         if (duplicado) {
-            throw new CongregacaoNomeDuplicadoException(nome, area.getNumero());
+            throw new CongregacaoNomeDuplicadoException(nome);
         }
     }
 }

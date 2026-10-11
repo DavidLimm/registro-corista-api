@@ -1,8 +1,12 @@
 package com.registraai.registro_coristas_api.congregacao.repository;
 
-import com.registraai.registro_coristas_api.area.model.Area;
-import com.registraai.registro_coristas_api.area.repository.AreaRepository;
+import com.registraai.registro_coristas_api.agrupamento.model.Agrupamento;
+import com.registraai.registro_coristas_api.agrupamento.model.Subdivisao;
+import com.registraai.registro_coristas_api.agrupamento.model.TipoAgrupamento;
+import com.registraai.registro_coristas_api.agrupamento.repository.AgrupamentoRepository;
+import com.registraai.registro_coristas_api.agrupamento.repository.SubdivisaoRepository;
 import com.registraai.registro_coristas_api.congregacao.model.Congregacao;
+import com.registraai.registro_coristas_api.suporte.HierarquiaTeste;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -17,8 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Valida o mapeamento de {@link Congregacao} contra a migration V3 ({@code ddl-auto: validate}) e a contagem
- * usada pela regra "não inativar área com congregação ativa".
+ * Valida o mapeamento de {@link Congregacao} contra as migrations ({@code ddl-auto: validate}), a unicidade do nome
+ * por subdivisão e as contagens usadas pela regra "não inativar com congregação ativa".
  */
 @DataJpaTest
 @Testcontainers
@@ -33,17 +37,23 @@ class CongregacaoRepositoryTest {
     private CongregacaoRepository congregacaoRepository;
 
     @Autowired
-    private AreaRepository areaRepository;
+    private AgrupamentoRepository agrupamentoRepository;
 
-    private Congregacao salvar(Area area, String nome, boolean ativa) {
-        return congregacaoRepository.saveAndFlush(Congregacao.builder().area(area).nome(nome).ativa(ativa).build());
+    @Autowired
+    private SubdivisaoRepository subdivisaoRepository;
+
+    private Subdivisao novaSubdivisao() {
+        return HierarquiaTeste.salvarSubdivisao(agrupamentoRepository, subdivisaoRepository);
+    }
+
+    private Congregacao salvar(Subdivisao subdivisao, String nome, boolean ativa) {
+        return congregacaoRepository.saveAndFlush(Congregacao.builder().subdivisao(subdivisao).nome(nome).ativa(ativa).build());
     }
 
     @Test
     void salvar_geraIdTimestampsEAtivaPorPadrao() {
-        Area area = areaRepository.saveAndFlush(Area.builder().numero(40).nome("Área 40").build());
-
-        Congregacao salva = congregacaoRepository.saveAndFlush(Congregacao.builder().area(area).nome("Sede").build());
+        Congregacao salva = congregacaoRepository.saveAndFlush(
+                Congregacao.builder().subdivisao(novaSubdivisao()).nome("Sede").build());
 
         assertThat(salva.getId()).isNotNull();
         assertThat(salva.getCriadoEm()).isNotNull();
@@ -52,66 +62,77 @@ class CongregacaoRepositoryTest {
     }
 
     @Test
-    void countByAreaIdAndAtivaTrue_contaSoAtivasDaAreaInformada() {
-        Area area40 = areaRepository.saveAndFlush(Area.builder().numero(40).nome("Área 40").build());
-        Area area41 = areaRepository.saveAndFlush(Area.builder().numero(41).nome("Área 41").build());
-        salvar(area40, "Sede", true);
-        salvar(area40, "Bairro Novo", true);
-        salvar(area40, "Fechada", false);
-        salvar(area41, "Outra área", true);
+    void countBySubdivisaoIdAndAtivaTrue_contaSoAtivasDaSubdivisaoInformada() {
+        Subdivisao a = novaSubdivisao();
+        Subdivisao b = novaSubdivisao();
+        salvar(a, "Sede", true);
+        salvar(a, "Bairro Novo", true);
+        salvar(a, "Fechada", false);
+        salvar(b, "Outra", true);
 
-        assertThat(congregacaoRepository.countByAreaIdAndAtivaTrue(area40.getId())).isEqualTo(2);
-        assertThat(congregacaoRepository.countByAreaIdAndAtivaTrue(area41.getId())).isEqualTo(1);
+        assertThat(congregacaoRepository.countBySubdivisaoIdAndAtivaTrue(a.getId())).isEqualTo(2);
+        assertThat(congregacaoRepository.countBySubdivisaoIdAndAtivaTrue(b.getId())).isEqualTo(1);
     }
 
     @Test
-    void countByAreaIdAndAtivaTrue_retornaZeroQuandoSoHaInativasOuNaoHaNenhuma() {
-        Area comInativa = areaRepository.saveAndFlush(Area.builder().numero(50).nome("Área 50").build());
-        Area vazia = areaRepository.saveAndFlush(Area.builder().numero(51).nome("Área 51").build());
+    void countBySubdivisaoIdAndAtivaTrue_retornaZeroQuandoSoHaInativasOuNaoHaNenhuma() {
+        Subdivisao comInativa = novaSubdivisao();
+        Subdivisao vazia = novaSubdivisao();
         salvar(comInativa, "Fechada", false);
 
-        assertThat(congregacaoRepository.countByAreaIdAndAtivaTrue(comInativa.getId())).isZero();
-        assertThat(congregacaoRepository.countByAreaIdAndAtivaTrue(vazia.getId())).isZero();
+        assertThat(congregacaoRepository.countBySubdivisaoIdAndAtivaTrue(comInativa.getId())).isZero();
+        assertThat(congregacaoRepository.countBySubdivisaoIdAndAtivaTrue(vazia.getId())).isZero();
     }
 
     @Test
-    void salvar_mesmoNomeNaMesmaAreaViolaUnicidadeDoBanco() {
-        Area area = areaRepository.saveAndFlush(Area.builder().numero(60).nome("Área 60").build());
-        salvar(area, "Sede", true);
+    void contarAtivasPorAgrupamento_somaTodasAsSubdivisoesDoAgrupamento() {
+        Agrupamento filial = agrupamentoRepository.saveAndFlush(
+                Agrupamento.builder().tipo(TipoAgrupamento.FILIAL).nome("Filial com duas áreas").build());
+        Subdivisao area1 = subdivisaoRepository.saveAndFlush(Subdivisao.builder().agrupamento(filial).numero(1).build());
+        Subdivisao area2 = subdivisaoRepository.saveAndFlush(Subdivisao.builder().agrupamento(filial).numero(2).build());
+        salvar(area1, "Sede", true);
+        salvar(area2, "Bairro", true);
+        salvar(area2, "Fechada", false);
+        salvar(novaSubdivisao(), "De outro agrupamento", true);
 
-        assertThatThrownBy(() -> salvar(area, "Sede", true))
+        assertThat(congregacaoRepository.contarAtivasPorAgrupamento(filial.getId())).isEqualTo(2);
+    }
+
+    @Test
+    void salvar_mesmoNomeNaMesmaSubdivisaoViolaUnicidadeDoBanco() {
+        Subdivisao subdivisao = novaSubdivisao();
+        salvar(subdivisao, "Sede", true);
+
+        assertThatThrownBy(() -> salvar(subdivisao, "Sede", true))
                 .isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessageContaining("uk_congregacao_area_nome");
+                .hasMessageContaining("uk_congregacao_subdivisao_nome");
     }
 
     @Test
-    void salvar_mesmoNomeEmAreasDiferentesEPermitido() {
-        Area area61 = areaRepository.saveAndFlush(Area.builder().numero(61).nome("Área 61").build());
-        Area area62 = areaRepository.saveAndFlush(Area.builder().numero(62).nome("Área 62").build());
+    void salvar_mesmoNomeEmSubdivisoesDiferentesEPermitido() {
+        salvar(novaSubdivisao(), "Sede", true);
 
-        salvar(area61, "Sede", true);
-
-        assertThat(salvar(area62, "Sede", true).getId()).isNotNull();
+        assertThat(salvar(novaSubdivisao(), "Sede", true).getId()).isNotNull();
     }
 
     @Test
-    void existsByAreaIdAndNomeIgnoreCase_ignoraMaiusculasEEscopoDaArea() {
-        Area area63 = areaRepository.saveAndFlush(Area.builder().numero(63).nome("Área 63").build());
-        Area area64 = areaRepository.saveAndFlush(Area.builder().numero(64).nome("Área 64").build());
-        salvar(area63, "Sede Central", true);
+    void existsBySubdivisaoIdAndNomeIgnoreCase_ignoraMaiusculasEEscopoDaSubdivisao() {
+        Subdivisao a = novaSubdivisao();
+        Subdivisao b = novaSubdivisao();
+        salvar(a, "Sede Central", true);
 
-        assertThat(congregacaoRepository.existsByAreaIdAndNomeIgnoreCase(area63.getId(), "sede central")).isTrue();
-        assertThat(congregacaoRepository.existsByAreaIdAndNomeIgnoreCase(area63.getId(), "Outra")).isFalse();
-        assertThat(congregacaoRepository.existsByAreaIdAndNomeIgnoreCase(area64.getId(), "Sede Central")).isFalse();
+        assertThat(congregacaoRepository.existsBySubdivisaoIdAndNomeIgnoreCase(a.getId(), "sede central")).isTrue();
+        assertThat(congregacaoRepository.existsBySubdivisaoIdAndNomeIgnoreCase(a.getId(), "Outra")).isFalse();
+        assertThat(congregacaoRepository.existsBySubdivisaoIdAndNomeIgnoreCase(b.getId(), "Sede Central")).isFalse();
     }
 
     @Test
-    void existsByAreaIdAndNomeIgnoreCaseAndIdNot_desconsideraOProprioRegistro() {
-        Area area = areaRepository.saveAndFlush(Area.builder().numero(65).nome("Área 65").build());
-        Congregacao sede = salvar(area, "Sede", true);
-        Congregacao filial = salvar(area, "Filial", true);
+    void existsBySubdivisaoIdAndNomeIgnoreCaseAndIdNot_desconsideraOProprioRegistro() {
+        Subdivisao subdivisao = novaSubdivisao();
+        Congregacao sede = salvar(subdivisao, "Sede", true);
+        Congregacao filial = salvar(subdivisao, "Filial", true);
 
-        assertThat(congregacaoRepository.existsByAreaIdAndNomeIgnoreCaseAndIdNot(area.getId(), "SEDE", sede.getId())).isFalse();
-        assertThat(congregacaoRepository.existsByAreaIdAndNomeIgnoreCaseAndIdNot(area.getId(), "SEDE", filial.getId())).isTrue();
+        assertThat(congregacaoRepository.existsBySubdivisaoIdAndNomeIgnoreCaseAndIdNot(subdivisao.getId(), "SEDE", sede.getId())).isFalse();
+        assertThat(congregacaoRepository.existsBySubdivisaoIdAndNomeIgnoreCaseAndIdNot(subdivisao.getId(), "SEDE", filial.getId())).isTrue();
     }
 }

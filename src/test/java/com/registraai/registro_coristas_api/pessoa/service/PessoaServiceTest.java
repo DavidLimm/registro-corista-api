@@ -1,6 +1,8 @@
 package com.registraai.registro_coristas_api.pessoa.service;
 
-import com.registraai.registro_coristas_api.area.model.Area;
+import com.registraai.registro_coristas_api.usuario.service.EscopoDeAcesso;
+import com.registraai.registro_coristas_api.agrupamento.model.Subdivisao;
+import com.registraai.registro_coristas_api.suporte.HierarquiaTeste;
 import com.registraai.registro_coristas_api.congregacao.exception.CongregacaoInativaException;
 import com.registraai.registro_coristas_api.congregacao.exception.CongregacaoNaoEncontradaException;
 import com.registraai.registro_coristas_api.congregacao.model.Congregacao;
@@ -71,19 +73,29 @@ class PessoaServiceTest {
     @Mock
     private EnderecoService enderecoService;
 
+    @Mock
+    private EscopoDeAcesso escopo;
+
     private PessoaService pessoaService;
 
     private final UUID congregacaoId = UUID.randomUUID();
-    private final Area area = Area.builder().id(UUID.randomUUID()).numero(40).nome("Área 40").build();
+    private final Subdivisao subdivisao = HierarquiaTeste.subdivisaoDaArea40();
     private final Congregacao congregacao =
-            Congregacao.builder().id(congregacaoId).area(area).nome("Sede").build();
+            Congregacao.builder().id(congregacaoId).subdivisao(subdivisao).nome("Sede").build();
     private final EnderecoRequest enderecoRequest =
             new EnderecoRequest("Rua da Aurora", "123", null, "Boa Vista", "Recife", "PE", "50050000");
 
     @BeforeEach
+    void semRestricaoDeEscopo() {
+        // o recorte por agrupamento tem testes próprios (EscopoDeAcessoTest); aqui ninguém é barrado por ele
+        org.mockito.Mockito.lenient().when(escopo.restringirA(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocacao -> org.springframework.data.jpa.domain.Specification.unrestricted());
+    }
+
+    @BeforeEach
     void criarService() {
         pessoaService = new PessoaService(
-                pessoaRepository, historicoStatusPessoaRepository, congregacaoService, enderecoService, RELOGIO);
+                pessoaRepository, historicoStatusPessoaRepository, congregacaoService, enderecoService, escopo, RELOGIO);
     }
 
     private PessoaRequest request(LocalDate nascimento, EnderecoRequest endereco, String responsavelNome,
@@ -192,7 +204,7 @@ class PessoaServiceTest {
 
     @Test
     void criar_lancaExcecaoQuandoCongregacaoEstaInativa() {
-        Congregacao inativa = Congregacao.builder().id(congregacaoId).area(area).nome("Sede").ativa(false).build();
+        Congregacao inativa = Congregacao.builder().id(congregacaoId).subdivisao(subdivisao).nome("Sede").ativa(false).build();
         when(congregacaoService.buscarPorId(congregacaoId)).thenReturn(inativa);
 
         assertThatThrownBy(() -> pessoaService.criar(request(ADULTO, null, null, null, null)))
@@ -236,7 +248,7 @@ class PessoaServiceTest {
         Pageable esperado = PageRequest.of(2, 15, Sort.by("nome").and(Sort.by("id")));
         when(pessoaRepository.findAll(ArgumentMatchers.<Specification<Pessoa>>any(), eq(esperado))).thenReturn(pagina);
 
-        assertThat(pessoaService.listar(new PessoaFiltro(null, null, null, null, null), 2, 15)).isSameAs(pagina);
+        assertThat(pessoaService.listar(new PessoaFiltro(null, null, null, null, null, null), 2, 15)).isSameAs(pagina);
     }
 
     @Test
@@ -244,7 +256,7 @@ class PessoaServiceTest {
         Page<Pessoa> pagina = new PageImpl<>(List.of());
         Pageable esperado = PageRequest.of(0, 20, Sort.by("nome").and(Sort.by("id")));
         when(pessoaRepository.findAll(ArgumentMatchers.<Specification<Pessoa>>any(), eq(esperado))).thenReturn(pagina);
-        PessoaFiltro filtro = new PessoaFiltro("  mar_ia ", UUID.randomUUID(), congregacaoId,
+        PessoaFiltro filtro = new PessoaFiltro("  mar_ia ", null, UUID.randomUUID(), congregacaoId,
                 FaixaEtaria.ADOLESCENTE, StatusPessoa.PENDENTE);
 
         assertThat(pessoaService.listar(filtro, 0, 20)).isSameAs(pagina);
@@ -323,7 +335,7 @@ class PessoaServiceTest {
         UUID id = UUID.randomUUID();
         UUID outraId = UUID.randomUUID();
         Pessoa existente = pessoaAprovada(id);
-        Congregacao outraInativa = Congregacao.builder().id(outraId).area(area).nome("Filial").ativa(false).build();
+        Congregacao outraInativa = Congregacao.builder().id(outraId).subdivisao(subdivisao).nome("Filial").ativa(false).build();
         when(pessoaRepository.findById(id)).thenReturn(Optional.of(existente));
         when(congregacaoService.buscarPorId(outraId)).thenReturn(outraInativa);
         var requestOutra = new PessoaRequest("Maria", ADULTO, outraId, null, null, null, null);
@@ -338,7 +350,7 @@ class PessoaServiceTest {
     void atualizar_trocaDeCongregacaoParaUmaAtivaFunciona() {
         UUID id = UUID.randomUUID();
         UUID outraId = UUID.randomUUID();
-        Congregacao outra = Congregacao.builder().id(outraId).area(area).nome("Filial").build();
+        Congregacao outra = Congregacao.builder().id(outraId).subdivisao(subdivisao).nome("Filial").build();
         when(pessoaRepository.findById(id)).thenReturn(Optional.of(pessoaAprovada(id)));
         when(congregacaoService.buscarPorId(outraId)).thenReturn(outra);
         repositorioDevolveOQueRecebe();

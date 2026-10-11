@@ -1,6 +1,7 @@
 package com.registraai.registro_coristas_api.corista;
 
 import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
+import com.registraai.registro_coristas_api.suporte.HierarquiaTeste;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,16 +58,12 @@ class CoristaIntegracaoTest {
     }
 
     private String criarArea(int numero) throws Exception {
-        String location = mockMvc.perform(post("/v1/api/areas").contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"numero\": %d, \"nome\": \"Área %d\" }".formatted(numero, numero)))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getHeader("Location");
-        return idDoLocation(location);
+        return HierarquiaTeste.criarSubdivisao(mockMvc);
     }
 
     private String criarCongregacao(String areaId, String nome) throws Exception {
         String location = mockMvc.perform(post("/v1/api/congregacoes").contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"areaId\": \"%s\", \"nome\": \"%s\" }".formatted(areaId, nome)))
+                        .content("{ \"subdivisaoId\": \"%s\", \"nome\": \"%s\" }".formatted(areaId, nome)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getHeader("Location");
         return idDoLocation(location);
@@ -118,7 +115,7 @@ class CoristaIntegracaoTest {
                 .andExpect(jsonPath("$.pessoa.faixaEtaria").value("JOVEM"))
                 .andExpect(jsonPath("$.pessoa.aprovadoPor").doesNotExist())
                 .andExpect(jsonPath("$.pessoa.congregacao.id").value(congregacaoId))
-                .andExpect(jsonPath("$.pessoa.congregacao.area.numero").value(1))
+                .andExpect(jsonPath("$.pessoa.congregacao.agrupamento.tipo").value("FILIAL"))
                 .andExpect(jsonPath("$.pessoa.endereco.uf").value("PE"))
                 .andExpect(jsonPath("$.pessoa.endereco.cep").value("50050000"))
                 .andReturn().getResponse().getHeader("Location");
@@ -349,7 +346,7 @@ class CoristaIntegracaoTest {
         mockMvc.perform(delete("/v1/api/coristas/" + adolescente)).andExpect(status().isNoContent());
 
         // por área: só as 3 da área A, ordenadas por nome
-        mockMvc.perform(get("/v1/api/coristas").param("areaId", areaA))
+        mockMvc.perform(get("/v1/api/coristas").param("subdivisaoId", areaA))
                 .andExpect(jsonPath("$.page.totalElements").value(3))
                 .andExpect(jsonPath("$.content[0].pessoa.nome").value("Alice Lima"))
                 .andExpect(jsonPath("$.content[1].pessoa.nome").value("Beatriz Souza"))
@@ -361,27 +358,27 @@ class CoristaIntegracaoTest {
                 .andExpect(jsonPath("$.content[0].pessoa.nome").value("Carlos Souza"));
 
         // por lista de classificação
-        mockMvc.perform(get("/v1/api/coristas").param("areaId", areaA).param("listaClassificacao", "ADOLESCENTE"))
+        mockMvc.perform(get("/v1/api/coristas").param("subdivisaoId", areaA).param("listaClassificacao", "ADOLESCENTE"))
                 .andExpect(jsonPath("$.page.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].pessoa.nome").value("Alice Lima"));
-        mockMvc.perform(get("/v1/api/coristas").param("areaId", areaA).param("listaClassificacao", "JOVEM"))
+        mockMvc.perform(get("/v1/api/coristas").param("subdivisaoId", areaA).param("listaClassificacao", "JOVEM"))
                 .andExpect(jsonPath("$.page.totalElements").value(2));
 
         // por status (a adolescente foi inativada; as demais seguem pendentes)
-        mockMvc.perform(get("/v1/api/coristas").param("areaId", areaA).param("status", "INATIVO"))
+        mockMvc.perform(get("/v1/api/coristas").param("subdivisaoId", areaA).param("status", "INATIVO"))
                 .andExpect(jsonPath("$.page.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].pessoa.nome").value("Alice Lima"));
-        mockMvc.perform(get("/v1/api/coristas").param("areaId", areaA).param("status", "PENDENTE"))
+        mockMvc.perform(get("/v1/api/coristas").param("subdivisaoId", areaA).param("status", "PENDENTE"))
                 .andExpect(jsonPath("$.page.totalElements").value(2));
 
         // por trecho do nome, sem diferenciar maiúsculas
-        mockMvc.perform(get("/v1/api/coristas").param("areaId", areaA).param("nome", "SOUZA"))
+        mockMvc.perform(get("/v1/api/coristas").param("subdivisaoId", areaA).param("nome", "SOUZA"))
                 .andExpect(jsonPath("$.page.totalElements").value(2));
 
         // % e _ digitados não viram curinga
-        mockMvc.perform(get("/v1/api/coristas").param("areaId", areaA).param("nome", "%"))
+        mockMvc.perform(get("/v1/api/coristas").param("subdivisaoId", areaA).param("nome", "%"))
                 .andExpect(jsonPath("$.page.totalElements").value(0));
-        mockMvc.perform(get("/v1/api/coristas").param("areaId", areaA).param("nome", "_"))
+        mockMvc.perform(get("/v1/api/coristas").param("subdivisaoId", areaA).param("nome", "_"))
                 .andExpect(jsonPath("$.page.totalElements").value(0));
     }
 
@@ -393,13 +390,13 @@ class CoristaIntegracaoTest {
             cadastrar(sede, nome, haAnos(30, 0));
         }
 
-        mockMvc.perform(get("/v1/api/coristas").param("areaId", areaId).param("size", "2").param("page", "0"))
+        mockMvc.perform(get("/v1/api/coristas").param("subdivisaoId", areaId).param("size", "2").param("page", "0"))
                 .andExpect(jsonPath("$.page.totalElements").value(5))
                 .andExpect(jsonPath("$.page.totalPages").value(3))
                 .andExpect(jsonPath("$.content.length()").value(2))
                 .andExpect(jsonPath("$.content[0].pessoa.nome").value("Ana"))
                 .andExpect(jsonPath("$.content[1].pessoa.nome").value("Bruna"));
-        mockMvc.perform(get("/v1/api/coristas").param("areaId", areaId).param("size", "2").param("page", "2"))
+        mockMvc.perform(get("/v1/api/coristas").param("subdivisaoId", areaId).param("size", "2").param("page", "2"))
                 .andExpect(jsonPath("$.content.length()").value(1))
                 .andExpect(jsonPath("$.content[0].pessoa.nome").value("Elisa"));
     }

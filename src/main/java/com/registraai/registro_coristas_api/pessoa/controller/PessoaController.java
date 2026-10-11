@@ -56,7 +56,7 @@ public class PessoaController {
     }
 
     /**
-     * Paginada e ordenada por nome. Filtros opcionais: nome (trecho), areaId, congregacaoId, faixaEtaria, status.
+     * Paginada e ordenada por nome. Filtros opcionais: nome (trecho), agrupamentoId, subdivisaoId, congregacaoId, faixaEtaria, status.
      */
     @PreAuthorize("hasAuthority('PESSOA_LER')")
     @GetMapping

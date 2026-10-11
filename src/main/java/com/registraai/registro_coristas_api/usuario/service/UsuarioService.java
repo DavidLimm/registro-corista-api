@@ -1,5 +1,6 @@
 package com.registraai.registro_coristas_api.usuario.service;
 
+import com.registraai.registro_coristas_api.autenticacao.service.UsuarioLogado;
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
 import com.registraai.registro_coristas_api.pessoa.service.PessoaService;
 import com.registraai.registro_coristas_api.role.exception.RoleInativaException;
@@ -8,6 +9,7 @@ import com.registraai.registro_coristas_api.role.model.Role;
 import com.registraai.registro_coristas_api.role.repository.RoleRepository;
 import com.registraai.registro_coristas_api.usuario.dto.UsuarioRequest;
 import com.registraai.registro_coristas_api.usuario.event.PessoaVirouLiderEvent;
+import com.registraai.registro_coristas_api.usuario.exception.OperacaoReservadaAoAdminException;
 import com.registraai.registro_coristas_api.usuario.exception.UsuarioNaoEncontradoException;
 import com.registraai.registro_coristas_api.usuario.exception.UsuarioPessoaImutavelException;
 import com.registraai.registro_coristas_api.usuario.exception.EmailDuplicadoException;
@@ -48,6 +50,9 @@ public class UsuarioService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventos;
+    private final UsuarioLogado usuarioLogado;
+    private final EscopoService escopoService;
+    private final EscopoDeAcesso escopo;
 
     /** A pessoa ainda não pode ter usuário; o e-mail é único no sistema. */
     @Transactional
@@ -89,14 +94,20 @@ public class UsuarioService {
         usuario.setSenhaHash(passwordEncoder.encode(senha));
         usuario.setRoles(rolesSupplier.get());
         Usuario salvo = usuarioRepository.save(usuario);
+        escopoService.ajustarAoPapel(salvo);
         avisarSeVirouLider(salvo);
         return salvo;
     }
 
     @Transactional(readOnly = true)
     public Usuario buscarPorId(UUID id) {
-        return usuarioRepository.findById(id)
+        Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new UsuarioNaoEncontradoException(id));
+        // login de pessoa fora dos agrupamentos do usuário logado: 404
+        if (escopo.fora(usuario.getPessoa())) {
+            throw new UsuarioNaoEncontradoException(id);
+        }
+        return usuario;
     }
 
     /**
@@ -105,7 +116,8 @@ public class UsuarioService {
      */
     @Transactional(readOnly = true)
     public Page<Usuario> listar(Boolean ativo, int pagina, int tamanho) {
-        Specification<Usuario> especificacao = Specification.unrestricted();
+        Specification<Usuario> especificacao = Specification.<Usuario>unrestricted().and(escopo.restringirA(
+                root -> root.get("pessoa").get("congregacao").get("subdivisao").get("agrupamento").get("id")));
         if (ativo != null) {
             especificacao = especificacao.and((root, query, cb) -> cb.equal(root.get("ativo"), ativo));
         }
@@ -117,6 +129,7 @@ public class UsuarioService {
     @Transactional
     public Usuario atualizar(UUID id, UsuarioRequest request) {
         Usuario usuario = buscarPorId(id);
+        validarAlteracaoDoAlvo(usuario);
         if (!usuario.getPessoa().getId().equals(request.pessoaId())) {
             throw new UsuarioPessoaImutavelException();
         }
@@ -132,6 +145,7 @@ public class UsuarioService {
         usuario.setBloqueadoEm(null);
         usuario.setRoles(buscarRolesAtivas(request.roleIds()));
         Usuario salvo = usuarioRepository.save(usuario);
+        escopoService.ajustarAoPapel(salvo);
         avisarSeVirouLider(salvo);
         return salvo;
     }
@@ -140,6 +154,7 @@ public class UsuarioService {
     @Transactional
     public void inativar(UUID id) {
         Usuario usuario = buscarPorId(id);
+        validarAlteracaoDoAlvo(usuario);
         usuario.setAtivo(false);
         usuarioRepository.save(usuario);
     }
@@ -147,6 +162,7 @@ public class UsuarioService {
     @Transactional
     public Usuario reativar(UUID id) {
         Usuario usuario = buscarPorId(id);
+        validarAlteracaoDoAlvo(usuario);
         usuario.setAtivo(true);
         return usuarioRepository.save(usuario);
     }
@@ -164,11 +180,38 @@ public class UsuarioService {
                 throw new RoleInativaException(role.getNome());
             }
         }
+        validarConcessao(roles);
         // nenhum corista é líder: o papel de corista não convive com nenhum outro
         if (roles.size() > 1 && roles.stream().anyMatch(role -> role.getNome().startsWith("CORISTA_"))) {
             throw new PapelCoristaExclusivoException();
         }
         return new LinkedHashSet<>(roles);
+    }
+
+    /**
+     * Só o ADMIN concede os papéis globais (ADMIN e PASTOR_ADMIN); o PASTOR_ADMIN só concede PASTOR. Sem isso, quem
+     * pode gerenciar logins daria a si mesmo, ou a outro, mais poder do que tem.
+     */
+    private void validarConcessao(java.util.Collection<Role> roles) {
+        Usuario autor = usuarioLogado.atual().orElse(null);
+        if (autor != null && Papeis.tem(autor, Papeis.ADMIN)) {
+            return;
+        }
+        if (Papeis.ehGlobal(roles)) {
+            throw new OperacaoReservadaAoAdminException("Só o ADMIN concede os papéis ADMIN e PASTOR_ADMIN");
+        }
+        boolean pastorAdmin = autor != null && Papeis.tem(autor, Papeis.PASTOR_ADMIN);
+        if (pastorAdmin && roles.stream().anyMatch(role -> !Papeis.PASTOR.equals(role.getNome()))) {
+            throw new OperacaoReservadaAoAdminException("O PASTOR_ADMIN só concede o papel PASTOR");
+        }
+    }
+
+    /** Quem tem papel global (ADMIN, PASTOR_ADMIN) só é alterado pelo ADMIN: senão dava para tomar a conta dele. */
+    private void validarAlteracaoDoAlvo(Usuario alvo) {
+        boolean autorAdmin = usuarioLogado.atual().map(autor -> Papeis.tem(autor, Papeis.ADMIN)).orElse(false);
+        if (Papeis.ehGlobal(alvo) && !autorAdmin) {
+            throw new OperacaoReservadaAoAdminException("Só o ADMIN altera usuários ADMIN ou PASTOR_ADMIN");
+        }
     }
 
     // nenhum corista é líder: quem recebe um papel que não é de corista tem o cadastro de corista desligado

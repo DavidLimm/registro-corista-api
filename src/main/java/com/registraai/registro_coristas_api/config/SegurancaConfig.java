@@ -71,6 +71,8 @@ public class SegurancaConfig {
                         .requestMatchers(HttpMethod.POST, "/v1/api/coristas").permitAll()
                         // o formulário de auto-cadastro lista as congregações antes do login (só leitura)
                         .requestMatchers(HttpMethod.GET, "/v1/api/congregacoes", "/v1/api/congregacoes/*").permitAll()
+                        // idem para a hierarquia (agrupamentos e suas subdivisões): o formulário escolhe tipo → agrupamento → subdivisão
+                        .requestMatchers(HttpMethod.GET, "/v1/api/agrupamentos", "/v1/api/agrupamentos/**").permitAll()
                         // em prod o Swagger/OpenAPI está desabilitado no application-prod.yaml (responde 404)
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         // sem isso, qualquer erro tratado pelo container vira 401 no lugar do status real

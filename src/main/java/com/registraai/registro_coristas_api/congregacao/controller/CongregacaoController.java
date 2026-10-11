@@ -43,9 +43,10 @@ public class CongregacaoController {
     }
 
     @GetMapping
-    public List<CongregacaoResponse> listar(@RequestParam(required = false) UUID areaId,
+    public List<CongregacaoResponse> listar(@RequestParam(required = false) UUID agrupamentoId,
+                                            @RequestParam(required = false) UUID subdivisaoId,
                                             @RequestParam(required = false) Boolean ativa) {
-        return congregacaoService.listar(areaId, ativa).stream().map(CongregacaoResponse::de).toList();
+        return congregacaoService.listar(agrupamentoId, subdivisaoId, ativa).stream().map(CongregacaoResponse::de).toList();
     }
 
     @GetMapping("/{id}")

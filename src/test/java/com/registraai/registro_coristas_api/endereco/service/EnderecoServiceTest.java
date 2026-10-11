@@ -1,5 +1,6 @@
 package com.registraai.registro_coristas_api.endereco.service;
 
+import com.registraai.registro_coristas_api.usuario.service.EscopoDeAcesso;
 import com.registraai.registro_coristas_api.endereco.dto.EnderecoRequest;
 import com.registraai.registro_coristas_api.endereco.exception.EnderecoNaoEncontradoException;
 import com.registraai.registro_coristas_api.endereco.model.Endereco;
@@ -30,6 +31,9 @@ class EnderecoServiceTest {
 
     @Mock
     private PessoaRepository pessoaRepository;
+
+    @Mock
+    private EscopoDeAcesso escopo;
 
     @Mock
     private LimiteDeEdicaoDeContato limiteDeEdicaoDeContato;

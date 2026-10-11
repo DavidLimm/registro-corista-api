@@ -16,15 +16,15 @@ public interface CoristaRepository extends JpaRepository<Corista, UUID>, JpaSpec
     // tudo que o CoristaResponse acessa é LAZY e o open-in-view está desligado: carregar junto (só relações to-one,
     // então a paginação continua sendo feita no banco)
     @Override
-    @EntityGraph(attributePaths = {"pessoa", "pessoa.congregacao", "pessoa.congregacao.area", "pessoa.endereco"})
+    @EntityGraph(attributePaths = {"pessoa", "pessoa.congregacao", "pessoa.congregacao.subdivisao", "pessoa.congregacao.subdivisao.agrupamento", "pessoa.endereco"})
     Optional<Corista> findById(UUID id);
 
-    @EntityGraph(attributePaths = {"pessoa", "pessoa.congregacao", "pessoa.congregacao.area", "pessoa.endereco"})
+    @EntityGraph(attributePaths = {"pessoa", "pessoa.congregacao", "pessoa.congregacao.subdivisao", "pessoa.congregacao.subdivisao.agrupamento", "pessoa.endereco"})
     Optional<Corista> findByPessoaId(UUID pessoaId);
 
     boolean existsByIdAndPessoaIdAndDesligadoEmIsNull(UUID id, UUID pessoaId);
 
     @Override
-    @EntityGraph(attributePaths = {"pessoa", "pessoa.congregacao", "pessoa.congregacao.area", "pessoa.endereco"})
+    @EntityGraph(attributePaths = {"pessoa", "pessoa.congregacao", "pessoa.congregacao.subdivisao", "pessoa.congregacao.subdivisao.agrupamento", "pessoa.endereco"})
     Page<Corista> findAll(Specification<Corista> spec, Pageable pageable);
 }

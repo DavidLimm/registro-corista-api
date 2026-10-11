@@ -13,10 +13,10 @@ import java.util.UUID;
 
 public interface PessoaRepository extends JpaRepository<Pessoa, UUID>, JpaSpecificationExecutor<Pessoa> {
 
-    // congregacao, area e endereco são LAZY e o open-in-view está desligado: carregar junto para o Controller poder
+    // congregacao, subdivisao, agrupamento e endereco são LAZY e o open-in-view está desligado: carregar junto para o Controller poder
     // montar o Response (só relações to-one, então a paginação continua sendo feita no banco)
     @Override
-    @EntityGraph(attributePaths = {"congregacao", "congregacao.area", "endereco"})
+    @EntityGraph(attributePaths = {"congregacao", "congregacao.subdivisao", "congregacao.subdivisao.agrupamento", "endereco"})
     Optional<Pessoa> findById(UUID id);
 
     Optional<Pessoa> findByEnderecoId(UUID enderecoId);
@@ -24,6 +24,6 @@ public interface PessoaRepository extends JpaRepository<Pessoa, UUID>, JpaSpecif
     boolean existsByIdAndEnderecoId(UUID id, UUID enderecoId);
 
     @Override
-    @EntityGraph(attributePaths = {"congregacao", "congregacao.area", "endereco"})
+    @EntityGraph(attributePaths = {"congregacao", "congregacao.subdivisao", "congregacao.subdivisao.agrupamento", "endereco"})
     Page<Pessoa> findAll(Specification<Pessoa> spec, Pageable pageable);
 }

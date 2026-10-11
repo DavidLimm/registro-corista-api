@@ -15,6 +15,7 @@ import com.registraai.registro_coristas_api.pessoa.service.PessoaService;
 import com.registraai.registro_coristas_api.role.model.Permissao;
 import com.registraai.registro_coristas_api.usuario.model.Usuario;
 import com.registraai.registro_coristas_api.usuario.service.UsuarioService;
+import com.registraai.registro_coristas_api.usuario.service.EscopoDeAcesso;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -39,6 +40,7 @@ public class CoristaService {
     private final PessoaService pessoaService;
     private final UsuarioService usuarioService;
     private final UsuarioLogado usuarioLogado;
+    private final EscopoDeAcesso escopo;
     private final Clock clock;
 
     /**
@@ -93,7 +95,7 @@ public class CoristaService {
         boolean congregacaoPermitida = RecorteDeAcesso.congregacaoRestrita(usuario)
                 .map(congregacaoId -> congregacaoId.equals(corista.getPessoa().getCongregacao().getId()))
                 .orElse(true);
-        return listaPermitida && congregacaoPermitida;
+        return listaPermitida && congregacaoPermitida && !escopo.fora(corista.getPessoa());
     }
 
     /** O corista da pessoa logada; 404 se quem está logado não é corista (ex.: um líder). */
@@ -139,6 +141,9 @@ public class CoristaService {
         // desligado (ex.: virou líder) não aparece mais; só a lista do recorte do usuário
         Specification<Corista> especificacao = (root, query, cb) -> cb.and(
                 cb.isNull(root.get("desligadoEm")), root.get("listaClassificacao").in(permitidas));
+        // e só os agrupamentos a que o usuário tem acesso (ADMIN e PASTOR_ADMIN enxergam todos)
+        especificacao = especificacao.and(escopo.restringirA(
+                root -> root.get("pessoa").get("congregacao").get("subdivisao").get("agrupamento").get("id")));
         Optional<UUID> congregacaoRestrita = usuarioLogado.atual().flatMap(RecorteDeAcesso::congregacaoRestrita);
         if (congregacaoRestrita.isPresent()) {
             UUID congregacaoId = congregacaoRestrita.get();
@@ -150,9 +155,13 @@ public class CoristaService {
             especificacao = especificacao.and((root, query, cb) ->
                     cb.like(cb.lower(root.get("pessoa").get("nome")), trecho, '\\'));
         }
-        if (filtro.areaId() != null) {
+        if (filtro.agrupamentoId() != null) {
             especificacao = especificacao.and((root, query, cb) ->
-                    cb.equal(root.get("pessoa").get("congregacao").get("area").get("id"), filtro.areaId()));
+                    cb.equal(root.get("pessoa").get("congregacao").get("subdivisao").get("agrupamento").get("id"), filtro.agrupamentoId()));
+        }
+        if (filtro.subdivisaoId() != null) {
+            especificacao = especificacao.and((root, query, cb) ->
+                    cb.equal(root.get("pessoa").get("congregacao").get("subdivisao").get("id"), filtro.subdivisaoId()));
         }
         if (filtro.congregacaoId() != null) {
             especificacao = especificacao.and((root, query, cb) ->

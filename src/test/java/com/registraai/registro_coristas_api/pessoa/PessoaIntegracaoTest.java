@@ -1,6 +1,7 @@
 package com.registraai.registro_coristas_api.pessoa;
 
 import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
+import com.registraai.registro_coristas_api.suporte.HierarquiaTeste;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -61,17 +62,12 @@ class PessoaIntegracaoTest {
     }
 
     private String criarArea() throws Exception {
-        int numero = PROXIMA_AREA.getAndIncrement();
-        String location = mockMvc.perform(post("/v1/api/areas").contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"numero\": %d, \"nome\": \"Área %d\" }".formatted(numero, numero)))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getHeader("Location");
-        return idDoLocation(location);
+        return HierarquiaTeste.criarSubdivisao(mockMvc);
     }
 
     private String criarCongregacao(String areaId, String nome) throws Exception {
         String location = mockMvc.perform(post("/v1/api/congregacoes").contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"areaId\": \"%s\", \"nome\": \"%s\" }".formatted(areaId, nome)))
+                        .content("{ \"subdivisaoId\": \"%s\", \"nome\": \"%s\" }".formatted(areaId, nome)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getHeader("Location");
         return idDoLocation(location);
@@ -121,7 +117,7 @@ class PessoaIntegracaoTest {
         mockMvc.perform(get(location))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nome").value("Maria da Silva"))
-                .andExpect(jsonPath("$.congregacao.area.nome").exists())
+                .andExpect(jsonPath("$.congregacao.agrupamento.nome").exists())
                 .andExpect(jsonPath("$.endereco.logradouro").value("Rua da Aurora"));
     }
 
@@ -286,7 +282,7 @@ class PessoaIntegracaoTest {
         mockMvc.perform(delete("/v1/api/pessoas/" + adolescente)).andExpect(status().isNoContent());
 
         // por área: só as 3 da área A, ordenadas por nome
-        mockMvc.perform(get("/v1/api/pessoas").param("areaId", areaA))
+        mockMvc.perform(get("/v1/api/pessoas").param("subdivisaoId", areaA))
                 .andExpect(jsonPath("$.page.totalElements").value(3))
                 .andExpect(jsonPath("$.content[0].nome").value("Alice Lima"))
                 .andExpect(jsonPath("$.content[1].nome").value("Beatriz Souza"))
@@ -298,31 +294,31 @@ class PessoaIntegracaoTest {
                 .andExpect(jsonPath("$.content[0].nome").value("Carlos Souza"));
 
         // por faixa etária real
-        mockMvc.perform(get("/v1/api/pessoas").param("areaId", areaA).param("faixaEtaria", "ADOLESCENTE"))
+        mockMvc.perform(get("/v1/api/pessoas").param("subdivisaoId", areaA).param("faixaEtaria", "ADOLESCENTE"))
                 .andExpect(jsonPath("$.page.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].nome").value("Alice Lima"));
-        mockMvc.perform(get("/v1/api/pessoas").param("areaId", areaA).param("faixaEtaria", "JOVEM"))
+        mockMvc.perform(get("/v1/api/pessoas").param("subdivisaoId", areaA).param("faixaEtaria", "JOVEM"))
                 .andExpect(jsonPath("$.page.totalElements").value(2));
 
         // por status (a adolescente foi inativada; as demais seguem pendentes)
-        mockMvc.perform(get("/v1/api/pessoas").param("areaId", areaA).param("status", "INATIVO"))
+        mockMvc.perform(get("/v1/api/pessoas").param("subdivisaoId", areaA).param("status", "INATIVO"))
                 .andExpect(jsonPath("$.page.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].nome").value("Alice Lima"));
-        mockMvc.perform(get("/v1/api/pessoas").param("areaId", areaA).param("status", "PENDENTE"))
+        mockMvc.perform(get("/v1/api/pessoas").param("subdivisaoId", areaA).param("status", "PENDENTE"))
                 .andExpect(jsonPath("$.page.totalElements").value(2));
 
         // por trecho do nome, sem diferenciar maiúsculas
-        mockMvc.perform(get("/v1/api/pessoas").param("areaId", areaA).param("nome", "SOUZA"))
+        mockMvc.perform(get("/v1/api/pessoas").param("subdivisaoId", areaA).param("nome", "SOUZA"))
                 .andExpect(jsonPath("$.page.totalElements").value(2));
 
         // % e _ digitados não viram curinga
-        mockMvc.perform(get("/v1/api/pessoas").param("areaId", areaA).param("nome", "%"))
+        mockMvc.perform(get("/v1/api/pessoas").param("subdivisaoId", areaA).param("nome", "%"))
                 .andExpect(jsonPath("$.page.totalElements").value(0));
-        mockMvc.perform(get("/v1/api/pessoas").param("areaId", areaA).param("nome", "_"))
+        mockMvc.perform(get("/v1/api/pessoas").param("subdivisaoId", areaA).param("nome", "_"))
                 .andExpect(jsonPath("$.page.totalElements").value(0));
 
         // filtros combinados
-        mockMvc.perform(get("/v1/api/pessoas").param("areaId", areaA).param("faixaEtaria", "JOVEM")
+        mockMvc.perform(get("/v1/api/pessoas").param("subdivisaoId", areaA).param("faixaEtaria", "JOVEM")
                         .param("nome", "carlos"))
                 .andExpect(jsonPath("$.page.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].nome").value("Carlos Souza"));
@@ -336,11 +332,11 @@ class PessoaIntegracaoTest {
         cadastrar(sede, "Faz 18 hoje", hoje.minusYears(18));
         cadastrar(sede, "Faz 18 amanha", hoje.minusYears(18).plusDays(1));
 
-        mockMvc.perform(get("/v1/api/pessoas").param("areaId", areaId).param("faixaEtaria", "JOVEM"))
+        mockMvc.perform(get("/v1/api/pessoas").param("subdivisaoId", areaId).param("faixaEtaria", "JOVEM"))
                 .andExpect(jsonPath("$.page.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].nome").value("Faz 18 hoje"))
                 .andExpect(jsonPath("$.content[0].faixaEtaria").value("JOVEM"));
-        mockMvc.perform(get("/v1/api/pessoas").param("areaId", areaId).param("faixaEtaria", "ADOLESCENTE"))
+        mockMvc.perform(get("/v1/api/pessoas").param("subdivisaoId", areaId).param("faixaEtaria", "ADOLESCENTE"))
                 .andExpect(jsonPath("$.page.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].nome").value("Faz 18 amanha"))
                 .andExpect(jsonPath("$.content[0].faixaEtaria").value("ADOLESCENTE"));
@@ -354,13 +350,13 @@ class PessoaIntegracaoTest {
             cadastrar(sede, nome, haAnos(30, 0));
         }
 
-        mockMvc.perform(get("/v1/api/pessoas").param("areaId", areaId).param("size", "2").param("page", "0"))
+        mockMvc.perform(get("/v1/api/pessoas").param("subdivisaoId", areaId).param("size", "2").param("page", "0"))
                 .andExpect(jsonPath("$.page.totalElements").value(5))
                 .andExpect(jsonPath("$.page.totalPages").value(3))
                 .andExpect(jsonPath("$.content.length()").value(2))
                 .andExpect(jsonPath("$.content[0].nome").value("Ana"))
                 .andExpect(jsonPath("$.content[1].nome").value("Bruna"));
-        mockMvc.perform(get("/v1/api/pessoas").param("areaId", areaId).param("size", "2").param("page", "2"))
+        mockMvc.perform(get("/v1/api/pessoas").param("subdivisaoId", areaId).param("size", "2").param("page", "2"))
                 .andExpect(jsonPath("$.content.length()").value(1))
                 .andExpect(jsonPath("$.content[0].nome").value("Elisa"));
     }
@@ -376,7 +372,7 @@ class PessoaIntegracaoTest {
                 .andExpect(status().isCreated());
 
         // a pessoa é uma só: o corista é uma especialização dela, então ela também é listada como pessoa
-        mockMvc.perform(get("/v1/api/pessoas").param("areaId", areaId))
+        mockMvc.perform(get("/v1/api/pessoas").param("subdivisaoId", areaId))
                 .andExpect(jsonPath("$.page.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].nome").value("Gabi Corista"));
     }

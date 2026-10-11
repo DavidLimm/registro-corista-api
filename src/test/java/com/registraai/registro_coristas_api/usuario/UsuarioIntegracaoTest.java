@@ -1,6 +1,7 @@
 package com.registraai.registro_coristas_api.usuario;
 
 import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
+import com.registraai.registro_coristas_api.suporte.HierarquiaTeste;
 import com.registraai.registro_coristas_api.pessoa.service.PessoaService;
 import com.registraai.registro_coristas_api.role.repository.RoleRepository;
 import org.junit.jupiter.api.Test;
@@ -55,16 +56,12 @@ class UsuarioIntegracaoTest {
     }
 
     private String criarArea(int numero) throws Exception {
-        String location = mockMvc.perform(post("/v1/api/areas").contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"numero\": %d, \"nome\": \"Área %d\" }".formatted(numero, numero)))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getHeader("Location");
-        return idDoLocation(location);
+        return HierarquiaTeste.criarSubdivisao(mockMvc);
     }
 
     private String criarCongregacao(String areaId, String nome) throws Exception {
         String location = mockMvc.perform(post("/v1/api/congregacoes").contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"areaId\": \"%s\", \"nome\": \"%s\" }".formatted(areaId, nome)))
+                        .content("{ \"subdivisaoId\": \"%s\", \"nome\": \"%s\" }".formatted(areaId, nome)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getHeader("Location");
         return idDoLocation(location);
@@ -79,6 +76,9 @@ class UsuarioIntegracaoTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getHeader("Location");
         String pessoaId = idDoLocation(location);
+        // o MockMvc limpa o contexto de segurança ao fim de cada requisição; o service exige um usuário logado
+        org.springframework.security.core.context.SecurityContextHolder.setContext(
+                com.registraai.registro_coristas_api.suporte.UsuarioTesteFactory.contexto(new String[]{"ADMIN"}, true, new String[0]));
         pessoaService.aprovar(UUID.fromString(pessoaId), UUID.randomUUID());
         return pessoaId;
     }

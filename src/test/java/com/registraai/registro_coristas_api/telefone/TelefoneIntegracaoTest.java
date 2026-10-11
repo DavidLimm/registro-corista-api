@@ -1,6 +1,7 @@
 package com.registraai.registro_coristas_api.telefone;
 
 import com.registraai.registro_coristas_api.suporte.WithUsuarioTeste;
+import com.registraai.registro_coristas_api.suporte.HierarquiaTeste;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -47,14 +48,10 @@ class TelefoneIntegracaoTest {
     }
 
     private String criarPessoa() throws Exception {
-        int numeroDaArea = PROXIMA_AREA.getAndIncrement();
-        String areaId = idDoLocation(mockMvc.perform(post("/v1/api/areas").contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"numero\": %d, \"nome\": \"Área %d\" }".formatted(numeroDaArea, numeroDaArea)))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getHeader("Location"));
+        String areaId = HierarquiaTeste.criarSubdivisao(mockMvc);
         String congregacaoId = idDoLocation(mockMvc.perform(post("/v1/api/congregacoes")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"areaId\": \"%s\", \"nome\": \"Sede\" }".formatted(areaId)))
+                        .content("{ \"subdivisaoId\": \"%s\", \"nome\": \"Sede\" }".formatted(areaId)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getHeader("Location"));
         String location = mockMvc.perform(post("/v1/api/pessoas").contentType(MediaType.APPLICATION_JSON)

@@ -1,7 +1,9 @@
 package com.registraai.registro_coristas_api.usuario.service;
 
 import static org.mockito.Mockito.verifyNoInteractions;
+import com.registraai.registro_coristas_api.autenticacao.service.UsuarioLogado;
 import com.registraai.registro_coristas_api.usuario.event.PessoaVirouLiderEvent;
+import com.registraai.registro_coristas_api.usuario.exception.OperacaoReservadaAoAdminException;
 import com.registraai.registro_coristas_api.usuario.exception.PapelCoristaExclusivoException;
 import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
 import com.registraai.registro_coristas_api.pessoa.model.StatusPessoa;
@@ -63,11 +65,27 @@ class UsuarioServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private UsuarioLogado usuarioLogado;
+
+    @Mock
+    private EscopoService escopoService;
+
+    @Mock
+    private EscopoDeAcesso escopo;
+
     private UsuarioService usuarioService;
 
     @BeforeEach
+    void semRestricaoDeEscopo() {
+        // o recorte por agrupamento tem testes próprios (EscopoDeAcessoTest); aqui ninguém é barrado por ele
+        org.mockito.Mockito.lenient().when(escopo.restringirA(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocacao -> org.springframework.data.jpa.domain.Specification.unrestricted());
+    }
+
+    @BeforeEach
     void criarService() {
-        usuarioService = new UsuarioService(usuarioRepository, pessoaService, roleRepository, passwordEncoder, eventos);
+        usuarioService = new UsuarioService(usuarioRepository, pessoaService, roleRepository, passwordEncoder, eventos, usuarioLogado, escopoService, escopo);
     }
 
     private Pessoa pessoaAprovada() {
@@ -377,5 +395,100 @@ class UsuarioServiceTest {
         usuarioService.criar(request(pessoa.getId(), "a@a.com", Set.of(corista.getId())));
 
         verifyNoInteractions(eventos);
+    }
+
+    // ---------- concessão de papéis globais e escopo ----------
+
+    private Usuario autorComPapeis(String... nomes) {
+        Usuario autor = new Usuario();
+        autor.setId(UUID.randomUUID());
+        for (String nome : nomes) {
+            autor.getRoles().add(role(nome, true));
+        }
+        when(usuarioLogado.atual()).thenReturn(Optional.of(autor));
+        return autor;
+    }
+
+    private void criarUsuarioComRole(Role role) {
+        Pessoa pessoa = pessoaAprovada();
+        when(pessoaService.buscarPorId(pessoa.getId())).thenReturn(pessoa);
+        when(roleRepository.findAllById(Set.of(role.getId()))).thenReturn(List.of(role));
+        usuarioService.criar(request(pessoa.getId(), "novo@exemplo.com", Set.of(role.getId())));
+    }
+
+    @Test
+    void criar_adminPodeConcederPapelGlobal() {
+        autorComPapeis("ADMIN");
+        Role pastorAdmin = role("PASTOR_ADMIN", true);
+        when(passwordEncoder.encode(any())).thenReturn("hash");
+        repositorioDevolveOQueRecebe();
+
+        criarUsuarioComRole(pastorAdmin);
+
+        verify(escopoService).ajustarAoPapel(any(Usuario.class));
+    }
+
+    @Test
+    void criar_quemNaoEAdminNaoConcedeAdminNemPastorAdmin() {
+        autorComPapeis("PASTOR");
+
+        assertThatThrownBy(() -> criarUsuarioComRole(role("ADMIN", true)))
+                .isInstanceOf(OperacaoReservadaAoAdminException.class);
+        assertThatThrownBy(() -> criarUsuarioComRole(role("PASTOR_ADMIN", true)))
+                .isInstanceOf(OperacaoReservadaAoAdminException.class);
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void criar_pastorAdminSoConcedeOPapelPastor() {
+        autorComPapeis("PASTOR_ADMIN");
+        when(passwordEncoder.encode(any())).thenReturn("hash");
+        repositorioDevolveOQueRecebe();
+
+        criarUsuarioComRole(role("PASTOR", true));
+
+        assertThatThrownBy(() -> criarUsuarioComRole(role("LIDER_MOCIDADE", true)))
+                .isInstanceOf(OperacaoReservadaAoAdminException.class);
+    }
+
+    @Test
+    void criar_semUsuarioLogadoNaoConcedePapelGlobal() {
+        when(usuarioLogado.atual()).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> criarUsuarioComRole(role("ADMIN", true)))
+                .isInstanceOf(OperacaoReservadaAoAdminException.class);
+    }
+
+    @Test
+    void atualizarInativarEReativar_usuarioGlobalSoPeloAdmin() {
+        autorComPapeis("PASTOR_ADMIN");
+        Usuario alvo = new Usuario();
+        alvo.setId(UUID.randomUUID());
+        alvo.setPessoa(pessoaAprovada());
+        alvo.getRoles().add(role("ADMIN", true));
+        when(usuarioRepository.findById(alvo.getId())).thenReturn(Optional.of(alvo));
+
+        assertThatThrownBy(() -> usuarioService.atualizar(alvo.getId(),
+                request(alvo.getPessoa().getId(), "x@exemplo.com", Set.of(UUID.randomUUID()))))
+                .isInstanceOf(OperacaoReservadaAoAdminException.class);
+        assertThatThrownBy(() -> usuarioService.inativar(alvo.getId()))
+                .isInstanceOf(OperacaoReservadaAoAdminException.class);
+        assertThatThrownBy(() -> usuarioService.reativar(alvo.getId()))
+                .isInstanceOf(OperacaoReservadaAoAdminException.class);
+        assertThat(alvo.isAtivo()).isTrue();
+    }
+
+    @Test
+    void inativar_adminPodeInativarUsuarioGlobal() {
+        autorComPapeis("ADMIN");
+        Usuario alvo = new Usuario();
+        alvo.setId(UUID.randomUUID());
+        alvo.setPessoa(pessoaAprovada());
+        alvo.getRoles().add(role("PASTOR_ADMIN", true));
+        when(usuarioRepository.findById(alvo.getId())).thenReturn(Optional.of(alvo));
+
+        usuarioService.inativar(alvo.getId());
+
+        assertThat(alvo.isAtivo()).isFalse();
     }
 }

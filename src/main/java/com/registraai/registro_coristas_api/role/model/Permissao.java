@@ -28,8 +28,9 @@ public enum Permissao {
     CORISTA_CORRIGIR_NASCIMENTO,   // corrigir a data de nascimento de um corista (líderes); o próprio corista não altera
 
     // Estrutura da igreja
-    AREA_GERENCIAR,          // criar, editar e inativar áreas (apenas PASTOR)
     CONGREGACAO_GERENCIAR,   // criar, editar e inativar congregações (apenas PASTOR)
+    AGRUPAMENTO_GERENCIAR,   // criar, editar e inativar agrupamentos e subdivisões (apenas ADMIN por ora)
+    ESCOPO_GERENCIAR,        // vincular e desvincular usuários de agrupamentos (ADMIN e PASTOR_ADMIN)
 
     // Acesso e papéis
     USUARIO_GERENCIAR,           // criar, editar, inativar e reativar logins (apenas PASTOR)

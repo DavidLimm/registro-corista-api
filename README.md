@@ -1,10 +1,11 @@
 # registro-coristas-api
 
 API de gestão da mocidade (coristas) da **Assembleia de Deus em Pernambuco (IEAD-PE)**, com hierarquia
-**Área → Congregação → Pessoa → (Corista)** e controle de acesso baseado em papéis (RBAC).
+**Agrupamento → Subdivisão → Congregação → Pessoa → (Corista)** e controle de acesso baseado em papéis (RBAC).
 
-A IEAD-PE tem 74 áreas (matriz = Área 1), cada uma com N congregações. O MVP cobre apenas a **Área 40**
-(13 congregações), mas o modelo de dados já nasce multi-área.
+A IEAD-PE tem 74 áreas (matriz = Área 1), além de setores, filiais e campos missionários (no exterior), cada um com N
+congregações. O MVP cobre apenas a **Área 40** (13 congregações), mas o modelo de dados já nasce multi-agrupamento
+(ver [Hierarquia organizacional](#hierarquia-organizacional)).
 
 ## Stack
 
@@ -22,7 +23,7 @@ A IEAD-PE tem 74 áreas (matriz = Área 1), cada uma com N congregações. O MVP
 ## Arquitetura
 
 MVC clássico em camadas (`Controller → Service → Repository → DB`), organizado **por feature/domínio**
-(`area`, `congregacao`, `pessoa`, `corista`, `telefone`, `endereco`, `evento`, `role`, `usuario`...), e dentro
+(`agrupamento`, `congregacao`, `pessoa`, `corista`, `telefone`, `endereco`, `evento`, `role`, `usuario`...), e dentro
 de cada pacote a divisão técnica (`controller` / `service` / `repository` / `model` / `dto` / `exception`).
 
 Regras:
@@ -69,6 +70,33 @@ corista é desligado (não apagado).
 Cadastro de menores exige responsável legal (nome + telefone), consentimento explícito e trilha de
 aprovação/alteração.
 
+## Hierarquia organizacional
+
+```
+Agrupamento (tipo)  →  Subdivisão (nível do meio)  →  Congregação
+```
+
+| Tipo do agrupamento | Identificação | Subdivisão | Exemplo |
+|---|---|---|---|
+| `CAMPO_MISSIONARIO` | nome + país | **Local**, com nome | Argentina → Local Alejandro Korn → congregação |
+| `FILIAL` | nome | **Área**, com número | Petrolina → Área 1 → congregação |
+| `SETOR` | número + nome | **Área**, com número | Setor 1 (Cabo de Santo Agostinho) → Área 10 → congregação |
+| `AREA` | número | implícita (sem número nem nome) | Área 40 → congregação |
+
+- Os 4 tipos são fixos no código; as **instâncias** são dados. As **74 áreas já vêm no banco** (migration `V28`). Acrescentar ou
+  retirar uma área, setor, filial ou campo é pela API (`ativo = false` em vez de apagar, e só se não houver congregação ativa
+  nele), nunca por migration.
+- Números só são únicos dentro do agrupamento: a Área 3 de um setor não é a Área 3 de uma filial. Número de setor é único entre
+  setores, e número de área é único entre as áreas.
+- Fluxo do cadastro de congregação: tipo → agrupamento → (subdivisão, menos no tipo `AREA`) → nome da congregação.
+- **Escopo do usuário** (`usuario_agrupamento`): `ADMIN` e `PASTOR_ADMIN` são globais (sem vínculo); `PASTOR` até 2 agrupamentos,
+  mas quem tem um campo missionário fica só nele; demais papéis, exatamente 1 (herdado da congregação da pessoa; o pastor é
+  designado por `PUT /usuarios/{id}/agrupamentos`). Trocar o papel é barrado se o usuário tiver mais vínculos do que o novo papel
+  permite.
+- **`PASTOR_ADMIN`**: pastor geral, global e **somente leitura nos dados** de pessoas e coristas. Gerencia agrupamentos e
+  subdivisões, o escopo dos pastores e cria logins com papel `PASTOR`. Suas permissões não são editáveis pela API. Só o `ADMIN`
+  concede os papéis `ADMIN` e `PASTOR_ADMIN` e altera quem os tem.
+
 ## Segurança
 
 Autenticação **JWT** (stateless) e autorização por **permissão**, sempre no backend.
@@ -82,7 +110,12 @@ Autenticação **JWT** (stateless) e autorização por **permissão**, sempre no
   em `PUT /roles/{id}/permissoes` sem deploy.
 - **Recorte:** apoio, maestros e líderes só veem a lista (adolescentes ou jovens) do seu papel; o presbítero só a sua congregação; o
   corista só o próprio cadastro. Fora do recorte a resposta é 404.
-- **Público (sem login):** login, redefinição de senha, `POST /coristas` (auto-cadastro) e `GET /congregacoes`.
+- **Escopo por agrupamento:** além do recorte, cada usuário só enxerga e altera o que pertence aos agrupamentos a que está vinculado
+  (`usuario_agrupamento`): pessoas, coristas, telefones, endereços, fila de afastamento e logins (404 fora do escopo), e a escrita de
+  congregações (403). `ADMIN` e `PASTOR_ADMIN` são globais. Sem vínculo, não se enxerga nada. Ver
+  [Hierarquia organizacional](#hierarquia-organizacional).
+- **Público (sem login):** login, redefinição de senha, `POST /coristas` (auto-cadastro) e a leitura (`GET`) de `/congregacoes` e
+  `/agrupamentos` (com as subdivisões), que o formulário de cadastro usa.
 - **Em produção:** `JWT_SEGREDO` é obrigatório (Base64, mínimo 32 bytes; gere com `openssl rand -base64 64`) e **nunca** vai para o Git.
   O envio de e-mail da redefinição de senha ainda não tem provedor configurado.
 
@@ -92,16 +125,18 @@ Prefixo comum: `/v1/api`.
 
 | Recurso | Endpoints |
 |---|---|
-| **Área** | `POST /areas` · `GET /areas` · `GET /areas/{id}` · `PUT /areas/{id}` · `DELETE /areas/{id}` (soft) · `PATCH /areas/{id}/reativar` |
-| **Congregação** | `POST /congregacoes` · `GET /congregacoes` · `GET /congregacoes/{id}` · `PUT /congregacoes/{id}` · `DELETE /congregacoes/{id}` (soft) · `PATCH /congregacoes/{id}/reativar` |
-| **Pessoa** | `POST /pessoas` · `GET /pessoas` (paginado, filtros: nome, areaId, congregacaoId, faixaEtaria, status) · `GET /pessoas/{id}` · `PUT /pessoas/{id}` · `DELETE /pessoas/{id}` (soft → `INATIVO`) · `PATCH /pessoas/{id}/aprovar` · `PATCH /pessoas/{id}/reprovar` |
-| **Corista** | `POST /coristas` (aceita `usuario` opcional: cria login junto, papel derivado da lista de classificação) · `GET /coristas` (paginado, filtros: nome, areaId, congregacaoId, listaClassificacao, status) · `GET /coristas/{id}` · `PUT /coristas/{id}` · `DELETE /coristas/{id}` (soft → `INATIVO`) · `GET /coristas/meu` (o próprio cadastro) · `PATCH /coristas/{id}/aprovar` · `/reprovar` · `/promover` · `/afastar` · `/retornar-do-afastamento` · `/voz` (só o tipo de voz, para o maestro) · `POST /coristas/{id}/solicitar-afastamento` |
+| **Agrupamento** | `POST /agrupamentos` (`tipo`: `CAMPO_MISSIONARIO`, `FILIAL`, `SETOR` ou `AREA`) · `GET /agrupamentos` (filtros: tipo, ativo) · `GET /agrupamentos/{id}` · `PUT /agrupamentos/{id}` · `DELETE /agrupamentos/{id}` (soft) · `PATCH /agrupamentos/{id}/reativar` |
+| **Subdivisão** | `POST /agrupamentos/{id}/subdivisoes` · `GET /agrupamentos/{id}/subdivisoes` (filtro: ativo) · `GET`/`PUT`/`DELETE /agrupamentos/{id}/subdivisoes/{subId}` · `PATCH .../{subId}/reativar` — o tipo `AREA` tem uma subdivisão implícita, criada junto |
+| **Congregação** | `POST /congregacoes` (`subdivisaoId`) · `GET /congregacoes` (filtros: agrupamentoId, subdivisaoId, ativa) · `GET /congregacoes/{id}` · `PUT /congregacoes/{id}` · `DELETE /congregacoes/{id}` (soft) · `PATCH /congregacoes/{id}/reativar` |
+| **Pessoa** | `POST /pessoas` · `GET /pessoas` (paginado, filtros: nome, agrupamentoId, subdivisaoId, congregacaoId, faixaEtaria, status) · `GET /pessoas/{id}` · `PUT /pessoas/{id}` · `DELETE /pessoas/{id}` (soft → `INATIVO`) · `PATCH /pessoas/{id}/aprovar` · `PATCH /pessoas/{id}/reprovar` |
+| **Corista** | `POST /coristas` (aceita `usuario` opcional: cria login junto, papel derivado da lista de classificação) · `GET /coristas` (paginado, filtros: nome, agrupamentoId, subdivisaoId, congregacaoId, listaClassificacao, status) · `GET /coristas/{id}` · `PUT /coristas/{id}` · `DELETE /coristas/{id}` (soft → `INATIVO`) · `GET /coristas/meu` (o próprio cadastro) · `PATCH /coristas/{id}/aprovar` · `/reprovar` · `/promover` · `/afastar` · `/retornar-do-afastamento` · `/voz` (só o tipo de voz, para o maestro) · `POST /coristas/{id}/solicitar-afastamento` |
 | **Endereço** | `POST /enderecos` · `GET /enderecos/{id}` · `PUT /enderecos/{id}` |
 | **Telefone** | `POST /pessoas/{pessoaId}/telefones` · `GET /pessoas/{pessoaId}/telefones` · `GET .../telefones/{id}` · `PUT .../telefones/{id}` · `DELETE .../telefones/{id}` |
 | **Role** | `POST /roles` · `POST /roles/solicitacoes` (pede um papel novo, nasce `PENDENTE`) · `GET /roles` (filtros: ativo, status) · `GET /roles/{id}` · `PUT /roles/{id}` · `DELETE /roles/{id}` (soft) · `PATCH /roles/{id}/reativar` · `/aprovar` · `/reprovar` · `GET`/`PUT /roles/{id}/permissoes` |
 | **Solicitação de afastamento** | `GET /solicitacoes-afastamento` (fila, filtro: status) · `PATCH /solicitacoes-afastamento/{id}/aprovar` · `/negar` |
 | **Autenticação** | `POST /auth/login` · `PUT /auth/senha` · `POST /auth/redefinicao-senha/solicitar` · `POST /auth/redefinicao-senha/confirmar` |
 | **Usuário** (`Usuario`) | `POST /usuarios` · `GET /usuarios` (paginado, filtro: ativo) · `GET /usuarios/{id}` · `PUT /usuarios/{id}` · `DELETE /usuarios/{id}` (soft) · `PATCH /usuarios/{id}/reativar` — senha gravada como hash (BCrypt); não exige pessoa `APROVADO` (auto-cadastro cria pessoa + usuário juntos, ainda `PENDENTE`) |
+| **Escopo do usuário** | `GET /usuarios/{id}/agrupamentos` · `PUT /usuarios/{id}/agrupamentos` (substitui o conjunto; só `ADMIN` e `PASTOR_ADMIN`) · `GET /usuarios/meu/agrupamentos` (o do usuário logado, para qualquer login) |
 
 `aprovar`, `reprovar`, `afastar`, `retornar-do-afastamento` e `promover` registram o **usuário logado** como autor (não há mais parâmetro `...Por`).
 
@@ -183,7 +218,9 @@ docker compose --profile app up --build
   `app_user` → `usuario` e `app_user_role` → `usuario_role` · `V16` status `AFASTADO` · `V17`/`V18` permissões (`permissao`,
   `role_permissao`) · `V19`/`V20` trilha e histórico de status · `V21`/`V22` corista só vê o próprio cadastro e corrigir
   nascimento · `V23` bloqueio de login e redefinição de senha · `V24` edição de contato · `V25` desligamento de corista ·
-  `V26` solicitação de papel · `V27` solicitação de afastamento.
+  `V26` solicitação de papel · `V27` solicitação de afastamento · `V28` agrupamento/subdivisão, seed das 74 áreas e backfill das
+  congregações · `V29` permissão `AGRUPAMENTO_GERENCIAR` · `V30` congregação só por subdivisão (remove `area` e `AREA_GERENCIAR`) ·
+  `V31` `usuario_agrupamento`, permissão `ESCOPO_GERENCIAR` e papel `PASTOR_ADMIN` · `V32` escopo para quem já tinha login.
 
 ## Variáveis de ambiente
 
@@ -203,9 +240,8 @@ vêm da plataforma.
 
 ## Roadmap
 
-- **Hierarquia organizacional** (próximo): `Agrupamento` (campo missionário, filial, setor ou área) → `Subdivisão` → `Congregação`,
-  e escopo do usuário por **agrupamento** (`usuario_agrupamento`): `ADMIN` global · `PASTOR` até 2 (exceto campo missionário, onde fica
-  só nele) · demais papéis, exatamente 1. Decisão registrada no `AGENTS.md`.
+- **Hierarquia organizacional — pendências:** mapa das congregações da área no dashboard do pastor (latitude/longitude em
+  `congregacao`), trilha de auditoria da leitura do `PASTOR_ADMIN` sobre dados de menores (LGPD) e escopo do endereço de congregação.
 - **Segurança — pendências:** envio real de e-mail para a redefinição de senha, limite de tentativas no cadastro público,
   CORS e botão de Bearer no Swagger.
 - Módulo de **eventos**: adiado para outra versão (fora do escopo do MVP por ora).

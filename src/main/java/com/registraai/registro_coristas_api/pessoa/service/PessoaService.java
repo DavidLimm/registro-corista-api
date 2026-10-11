@@ -17,6 +17,7 @@ import com.registraai.registro_coristas_api.pessoa.model.Pessoa;
 import com.registraai.registro_coristas_api.pessoa.model.StatusPessoa;
 import com.registraai.registro_coristas_api.pessoa.repository.HistoricoStatusPessoaRepository;
 import com.registraai.registro_coristas_api.pessoa.repository.PessoaRepository;
+import com.registraai.registro_coristas_api.usuario.service.EscopoDeAcesso;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -42,6 +43,7 @@ public class PessoaService {
     private final HistoricoStatusPessoaRepository historicoStatusPessoaRepository;
     private final CongregacaoService congregacaoService;
     private final EnderecoService enderecoService;
+    private final EscopoDeAcesso escopo;
     private final Clock clock;
 
     /** Todo cadastro entra como {@code PENDENTE}; a aprovação é um passo separado. */
@@ -57,22 +59,32 @@ public class PessoaService {
 
     @Transactional(readOnly = true)
     public Pessoa buscarPorId(UUID id) {
-        return pessoaRepository.findById(id)
+        Pessoa pessoa = pessoaRepository.findById(id)
                 .orElseThrow(() -> new PessoaNaoEncontradaException(id));
+        // fora dos agrupamentos do usuário logado: 404, para não revelar que a pessoa existe
+        if (escopo.fora(pessoa)) {
+            throw new PessoaNaoEncontradaException(id);
+        }
+        return pessoa;
     }
 
     /** Ordenada por nome (o cliente não escolhe a ordenação). A faixa etária filtrada é a real, pela data de nascimento. */
     @Transactional(readOnly = true)
     public Page<Pessoa> listar(PessoaFiltro filtro, int pagina, int tamanho) {
-        Specification<Pessoa> especificacao = Specification.unrestricted();
+        Specification<Pessoa> especificacao = Specification.<Pessoa>unrestricted().and(escopo.restringirA(
+                root -> root.get("congregacao").get("subdivisao").get("agrupamento").get("id")));
         if (filtro.nome() != null && !filtro.nome().isBlank()) {
             String trecho = "%" + escaparLike(filtro.nome().trim().toLowerCase()) + "%";
             especificacao = especificacao.and((root, query, cb) ->
                     cb.like(cb.lower(root.get("nome")), trecho, '\\'));
         }
-        if (filtro.areaId() != null) {
+        if (filtro.agrupamentoId() != null) {
             especificacao = especificacao.and((root, query, cb) ->
-                    cb.equal(root.get("congregacao").get("area").get("id"), filtro.areaId()));
+                    cb.equal(root.get("congregacao").get("subdivisao").get("agrupamento").get("id"), filtro.agrupamentoId()));
+        }
+        if (filtro.subdivisaoId() != null) {
+            especificacao = especificacao.and((root, query, cb) ->
+                    cb.equal(root.get("congregacao").get("subdivisao").get("id"), filtro.subdivisaoId()));
         }
         if (filtro.congregacaoId() != null) {
             especificacao = especificacao.and((root, query, cb) ->
@@ -101,7 +113,10 @@ public class PessoaService {
     public Pessoa atualizar(UUID id, PessoaRequest request) {
         Pessoa pessoa = buscarPorId(id);
         if (!pessoa.getCongregacao().getId().equals(request.congregacaoId())) {
-            pessoa.setCongregacao(buscarCongregacaoAtiva(request.congregacaoId()));
+            Congregacao destino = buscarCongregacaoAtiva(request.congregacaoId());
+            // ninguém muda uma pessoa para fora dos próprios agrupamentos
+            escopo.exigirDentro(destino);
+            pessoa.setCongregacao(destino);
         }
         preencher(pessoa, request);
         vincularEndereco(pessoa, request.endereco());
